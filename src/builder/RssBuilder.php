@@ -27,17 +27,17 @@ class RssBuilder implements Builder
         foreach ($feed->metadata as $name => $value) {
             if (is_array($value)) {
                 foreach ($value as $valueItem) {
-                    $channel->addChild($name, $valueItem);
+                    $channel->addChild($name, htmlspecialchars((string) $valueItem, ENT_XML1 | ENT_QUOTES, 'UTF-8'));
                 }
             } else {
-                $channel->addChild($name, $value);
+                $channel->addChild($name, htmlspecialchars((string) value, ENT_XML1 | ENT_QUOTES, 'UTF-8'));
             }
         }
 
         foreach ($feed->items as $item) {
             $rssItem = $channel->addChild('item');
             foreach ($item->getData() as $name => $value) {
-                $rssItem->addChild($name, $value);
+                $rssItem->addChild($name, htmlspecialchars((string) $value, ENT_XML1 | ENT_QUOTES, 'UTF-8'));
             }
         }
 
