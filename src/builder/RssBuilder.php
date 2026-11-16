@@ -30,7 +30,7 @@ class RssBuilder implements Builder
                     $channel->addChild($name, htmlspecialchars((string) $valueItem, ENT_XML1 | ENT_QUOTES, 'UTF-8'));
                 }
             } else {
-                $channel->addChild($name, htmlspecialchars((string) value, ENT_XML1 | ENT_QUOTES, 'UTF-8'));
+                $channel->addChild($name, htmlspecialchars((string) $value, ENT_XML1 | ENT_QUOTES, 'UTF-8'));
             }
         }
 
