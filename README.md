@@ -64,11 +64,42 @@ and then the standard meta `description`, in that priority order. The original
 feed description is kept if the page cannot be fetched or has no usable metadata.
 Only HTTP and HTTPS item links are fetched. This works with both RSS and Atom.
 
-This requires PHP's DOM extension and adds one webpage request per item each time
-the pipe runs, so it can make processing slower. Page metadata may also be
-truncated; a usable page description replaces the feed description regardless of
-length. Place filters before this step to avoid fetching pages for discarded
-items, or after it to filter using the webpage descriptions.
+Descriptions are cached on disk by article URL for 24 hours. Failed requests and
+pages without usable metadata are cached for 5 minutes; these entries keep each
+item's own feed description. Only new or expired URLs are fetched on subsequent
+runs. Each webpage request has a 5-second timeout; timeouts and HTTP errors keep
+the feed description. The first run still fetches pages sequentially and can be
+slower.
+
+Optional settings (times are in seconds):
+
+```yaml
+- type: pageDescription
+  cache: true
+  cacheTtl: 86400
+  failureCacheTtl: 300
+  timeout: 5
+  # Optional: use a persistent directory instead of the system temporary directory.
+  cacheDir: /var/cache/rss-pipes/page-descriptions
+```
+
+By default, the cache lives in `sys_get_temp_dir()/rss-pipes-page-descriptions`
+(usually `/tmp/rss-pipes-page-descriptions`). Set `cache: false` to disable it,
+or set either TTL to `0` to disable caching that type of result. The cache
+directory must be writable by PHP. If it cannot be read or written, processing
+continues without caching. Delete its `.json` files to clear the cache; expired
+entries are ignored and replaced when their URL is requested again.
+
+In Docker, mount a volume at the configured `cacheDir` to keep cached descriptions
+when the container is recreated. For example, with the custom path above, add
+`page-descriptions:/var/cache/rss-pipes/page-descriptions` to the service's
+`volumes`, and declare `page-descriptions: {}` in the Compose file's top-level
+`volumes` mapping. Ensure the volume is writable by the PHP process.
+
+This requires PHP's DOM extension. Page metadata may also be truncated; a usable
+page description replaces the feed description regardless of length. Place
+filters before this step to avoid fetching pages for discarded items, or after
+it to filter using the webpage descriptions.
 
 ### Filter
 
