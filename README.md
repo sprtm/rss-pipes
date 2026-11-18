@@ -46,6 +46,30 @@ Parses rss feed.
 
 Parses atom feed.
 
+### PageDescription
+
+Optionally replaces each item's description with metadata from its linked webpage.
+Add this section after an `rss`, `atom`, or `pipe` section:
+
+```yaml
+-
+  type: rss
+  url: https://example.com/feed.xml
+-
+  type: pageDescription
+```
+
+Uses the first non-empty `og:description`, falling back to `twitter:description`
+and then the standard meta `description`, in that priority order. The original
+feed description is kept if the page cannot be fetched or has no usable metadata.
+Only HTTP and HTTPS item links are fetched. This works with both RSS and Atom.
+
+This requires PHP's DOM extension and adds one webpage request per item each time
+the pipe runs, so it can make processing slower. Page metadata may also be
+truncated; a usable page description replaces the feed description regardless of
+length. Place filters before this step to avoid fetching pages for discarded
+items, or after it to filter using the webpage descriptions.
+
 ### Filter
 
 Keep only items that fulfill the condition.
