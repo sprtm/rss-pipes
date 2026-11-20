@@ -46,6 +46,62 @@ Parses rss feed.
 
 Parses atom feed.
 
+### PageArticle
+
+Replaces each item's description with article text from its linked webpage.
+Works after `rss`, `atom`, or `pipe` sections:
+
+```yaml
+- type: rss
+  url: https://example.com/feed.xml
+- type: pageArticle
+```
+
+Extraction uses explicit `itemprop="articleBody"` markup first, then JSON-LD
+`articleBody` on articles and blog posts, then Readability's general article
+extractor. The result is plain text with paragraph breaks; scripts, navigation,
+forms, and other non-article elements are discarded. Readability results shorter
+than 200 characters are ignored to reduce accidental extraction of page controls.
+When available, an `article` or `main` element limits the heuristic extraction;
+site footers, print headers, and common interface notices are removed first.
+If no usable article is found, it falls back to `og:description`,
+`twitter:description`, and meta `description`, then keeps the item's own feed
+description. Do not add `pageDescription` after `pageArticle`, as that would
+replace the article text with a summary.
+
+No publisher settings are required by default. For a site whose article is not
+identified correctly, an optional XPath expression can select its body before
+the general extraction methods run:
+
+```yaml
+- type: pageArticle
+  bodyXPath: '//div[@class="article__body"]'
+```
+
+Matching nodes are combined in document order, without repeating nested matches.
+If the expression matches nothing usable, general extraction still runs.
+
+Fetching, caching, and timeouts work like `pageDescription`: one HTML request per
+new or expired URL, a 5-second timeout, successful results cached for 24 hours,
+and failures cached for 5 minutes. Metadata fallbacks count as successful results.
+The same `cache`, `cacheDir`, `cacheTtl`, `failureCacheTtl`, and `timeout` options
+are available. The default directory is
+`sys_get_temp_dir()/rss-pipes-page-articles`; article entries use a separate file
+prefix even with a shared custom directory. Different `bodyXPath` expressions
+also have separate cache entries. Existing description cache entries cannot
+supply article text, so switching types fetches each URL again once.
+
+Only the downloaded HTML is used: JavaScript, images, videos, and additional
+article APIs are not loaded. Missing text, paywalls, and blocked requests can
+limit extraction to an introduction or the existing description. General
+extraction is heuristic and may occasionally include unrelated text or omit
+parts of an article. Article extraction adds local processing, and full text
+makes cache files and generated feeds larger.
+
+Uses the PHP 7-compatible `andreskrey/readability.php` library. Run
+`composer install` after updating; its dependencies require PHP's DOM, XML, and
+mbstring extensions.
+
 ### PageDescription
 
 Optionally replaces each item's description with metadata from its linked webpage.

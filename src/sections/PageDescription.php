@@ -13,15 +13,19 @@ class PageDescription extends Section
     public $failureCacheTtl = 300;
     public $timeout = 5;
 
+    protected $sectionType = 'pageDescription';
+    protected $cacheDirectory = 'rss-pipes-page-descriptions';
+    protected $cachePrefix = '';
+
     public function init()
     {
         foreach (['cacheTtl', 'failureCacheTtl', 'timeout'] as $name) {
             if (!is_int($this->$name) || $this->$name < ($name === 'timeout' ? 1 : 0)) {
-                throw new exceptions\InvalidConfigException('pageDescription.' . $name . ' must be an integer ' . ($name === 'timeout' ? '> 0' : '>= 0'));
+                throw new exceptions\InvalidConfigException($this->sectionType . '.' . $name . ' must be an integer ' . ($name === 'timeout' ? '> 0' : '>= 0'));
             }
         }
         if (!is_bool($this->cache) || ($this->cacheDir !== null && (!is_string($this->cacheDir) || $this->cacheDir === ''))) {
-            throw new exceptions\InvalidConfigException('pageDescription requires a boolean cache and a non-empty string cacheDir');
+            throw new exceptions\InvalidConfigException($this->sectionType . ' requires a boolean cache and a non-empty string cacheDir');
         }
     }
 
@@ -60,8 +64,8 @@ class PageDescription extends Section
 
     protected function cachePath($url)
     {
-        $directory = $this->cacheDir === null ? sys_get_temp_dir() . '/rss-pipes-page-descriptions' : $this->cacheDir;
-        return rtrim($directory, '/\\') . '/' . hash('sha256', $url) . '.json';
+        $directory = $this->cacheDir === null ? sys_get_temp_dir() . '/' . $this->cacheDirectory : $this->cacheDir;
+        return rtrim($directory, '/\\') . '/' . $this->cachePrefix . hash('sha256', $url) . '.json';
     }
 
     protected function readCache($url)
@@ -124,30 +128,35 @@ class PageDescription extends Section
                 return null;
             }
 
-            $descriptions = [];
-            $keys = ['og:description', 'twitter:description', 'description'];
-            foreach ($document->getElementsByTagName('meta') as $meta) {
-                $property = strtolower(trim($meta->getAttribute('property')));
-                $name = strtolower(trim($meta->getAttribute('name')));
-                $content = trim($meta->getAttribute('content'));
-                if ($content === '') {
-                    continue;
-                }
-                foreach ($keys as $key) {
-                    if (($property === $key || $name === $key) && !isset($descriptions[$key])) {
-                        $descriptions[$key] = $content;
-                    }
-                }
-            }
-            foreach ($keys as $key) {
-                if (isset($descriptions[$key])) {
-                    return $descriptions[$key];
-                }
-            }
-            return null;
+            return $this->extractFromDocument($document);
         } finally {
             libxml_clear_errors();
             libxml_use_internal_errors($previous);
         }
+    }
+
+    protected function extractFromDocument(\DOMDocument $document)
+    {
+        $descriptions = [];
+        $keys = ['og:description', 'twitter:description', 'description'];
+        foreach ($document->getElementsByTagName('meta') as $meta) {
+            $property = strtolower(trim($meta->getAttribute('property')));
+            $name = strtolower(trim($meta->getAttribute('name')));
+            $content = trim($meta->getAttribute('content'));
+            if ($content === '') {
+                continue;
+            }
+            foreach ($keys as $key) {
+                if (($property === $key || $name === $key) && !isset($descriptions[$key])) {
+                    $descriptions[$key] = $content;
+                }
+            }
+        }
+        foreach ($keys as $key) {
+            if (isset($descriptions[$key])) {
+                return $descriptions[$key];
+            }
+        }
+        return null;
     }
 }
