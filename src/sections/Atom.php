@@ -11,7 +11,10 @@ class Atom extends Rss
 {
     public function parseBody($body, $feed)
     {
-        $xml = new \SimpleXMLElement($body);
+        $xml = new \SimpleXMLElement($body, LIBXML_NONET);
+        if ($xml->getName() !== 'feed') {
+            throw new \UnexpectedValueException('Expected Atom XML with a feed element');
+        }
         
         foreach ($xml->attributes() as $key => $val) {
             $feed->attributes += [$key => $val];

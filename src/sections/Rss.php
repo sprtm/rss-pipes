@@ -18,19 +18,44 @@ class Rss extends Section
      */
     public function processFeed($feed)
     {
-        $http = new \HttpClient(); 
+        $http = $this->createHttpClient();
         $body = $http->get($this->url);
-        if ($body !== false) {
-            $this->parseBody($body, $feed);
-            
-        } elseif ($this->showErrors) {
-            $feed->addItem(['title' => $http->lastError, 'link' => $this->url]);
+        if ($body === false) {
+            $error = $http->lastError ?: 'Feed request failed';
+        } elseif ($http->httpCode < 200 || $http->httpCode >= 300) {
+            $error = 'Feed request failed: HTTP ' . $http->httpCode;
+        } elseif (!is_string($body) || trim($body) === '') {
+            $error = 'The source feed returned an empty response';
+        } else {
+            $previous = libxml_use_internal_errors(true);
+            try {
+                $this->parseBody($body, $feed);
+                return;
+            } catch (\Exception $exception) {
+                $error = 'Invalid source feed: ' . $exception->getMessage();
+            } finally {
+                libxml_clear_errors();
+                libxml_use_internal_errors($previous);
+            }
         }
+        if ($this->showErrors) {
+            $feed->metadata += ['title' => 'RSS Pipes: source unavailable',
+                'link' => $this->url, 'description' => 'The source feed could not be loaded.'];
+            $feed->addItem(['title' => $error, 'link' => $this->url]);
+        }
+    }
+
+    protected function createHttpClient()
+    {
+        return new \HttpClient();
     }
     
     public function parseBody($body, $feed)
     {
-        $xml = new \SimpleXMLElement($body);
+        $xml = new \SimpleXMLElement($body, LIBXML_NONET);
+        if ($xml->getName() !== 'rss' || !isset($xml->channel)) {
+            throw new \UnexpectedValueException('Expected RSS XML with a channel');
+        }
         
         foreach ($xml->attributes() as $key => $val) {
             $feed->attributes += [$key => $val];

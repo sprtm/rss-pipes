@@ -42,9 +42,17 @@ Opening `index.php?pipe=urmaul` you will see rss feed of urmaul.com blog without
 
 Parses rss feed.
 
+Source requests must return a successful HTTP status and non-empty, valid RSS
+XML. Rejected requests (for example HTTP 406), empty responses, invalid XML,
+and unexpected document types produce an error item instead of a PHP fatal
+error page. A failed source supplies fallback channel metadata when none exists,
+so the error can be read as RSS. Set `showErrors: 0` to suppress error items.
+
 ### Atom
 
 Parses atom feed.
+
+Uses the same source-request error handling as `rss`, and expects Atom XML.
 
 ### PageArticle
 
