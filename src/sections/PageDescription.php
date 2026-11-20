@@ -42,7 +42,8 @@ class PageDescription extends Section
         $query = parse_url($item->link, PHP_URL_QUERY);
         $parameters = [];
         parse_str(is_string($query) ? $query : '', $parameters);
-        if (array_key_exists('pinnedEntry', $parameters) || array_key_exists('post', $parameters)) {
+        if (array_key_exists('pinnedEntry', $parameters) || array_key_exists('post', $parameters) ||
+            array_key_exists('ifr-dir-postId', $parameters)) {
             // These links point into a chat/live blog. Its HTML and cached page
             // text can contain many other updates; retain the feed's excerpt.
             return;

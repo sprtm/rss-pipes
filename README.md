@@ -81,7 +81,7 @@ If no usable article is found, it falls back to `og:description`,
 description. Do not add `pageDescription` after `pageArticle`, as that would
 replace the article text with a summary.
 
-For chat/live-blog links containing a `pinnedEntry` or `post` query parameter,
+For chat/live-blog links containing a `pinnedEntry`, `post`, or `ifr-dir-postId` query parameter,
 both `pageArticle` and `pageDescription` preserve the original feed description
 without requesting the page or using cached page text. These links identify a
 single update, while the page can contain many unrelated updates. Other live-blog

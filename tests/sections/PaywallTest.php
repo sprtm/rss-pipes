@@ -166,6 +166,8 @@ class PaywallTest extends \PHPUnit_Framework_TestCase
             ['https://example.com/live?pinnedEntry='],
             ['https://example.com/live?pinnedEntry[]=80116'],
             ['https://www.expressen.se/nyheter/expressen-direkt/?post=example-update'],
+            ['https://www.sydsvenskan.se/sydsvenskan-direkt/?ifr-dir-postId=faeb06cc-763b-4e92-b833-cd783950e5b4'],
+            ['https://www.sydsvenskan.se/sydsvenskan-direkt/?source=rss&ifr-dir-postId=example-update'],
         ];
     }
 
