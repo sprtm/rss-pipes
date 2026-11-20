@@ -11,8 +11,9 @@ use rsspipes\html\ArticleHtml;
 class PageArticle extends PageDescription
 {
     public $bodyXPath;
-    public $maxFetches = 5;
+    public $maxFetches;
     private $fetches = 0;
+    private $newLinks;
 
     protected $sectionType = 'pageArticle';
     protected $cacheDirectory = 'rss-pipes-page-articles';
@@ -22,7 +23,7 @@ class PageArticle extends PageDescription
     public function init()
     {
         parent::init();
-        if (!is_int($this->maxFetches) || $this->maxFetches < 0) {
+        if ($this->maxFetches !== null && (!is_int($this->maxFetches) || $this->maxFetches < 0)) {
             throw new exceptions\InvalidConfigException('pageArticle.maxFetches must be a non-negative integer');
         }
         if ($this->bodyXPath !== null) {
@@ -41,14 +42,57 @@ class PageArticle extends PageDescription
 
     public function processFeed($feed)
     {
+        if ($this->maxFetches === null) {
+            parent::processFeed($feed);
+            return;
+        }
         $this->fetches = 0;
-        parent::processFeed($feed);
+        $this->newLinks = [];
+        $directory = dirname($this->cachePath('')) . '/seen';
+        try {
+            if (is_dir($directory) || @mkdir($directory, 0775, true) || is_dir($directory)) {
+                $lock = @fopen($directory . '/batch.lock', 'c');
+                if ($lock !== false) {
+                    try {
+                        if (flock($lock, LOCK_EX)) {
+                            foreach ($feed->items as $item) {
+                                if ($item->sourceError || !is_string($item->link) ||
+                                    !preg_match('~^https?://~i', $item->link)) {
+                                    continue;
+                                }
+                                // Claim every observed link, including those beyond the limit.
+                                $marker = $directory . '/' . basename($this->cachePath($item->link));
+                                $created = @fopen($marker, 'x');
+                                if ($created !== false) {
+                                    fclose($created);
+                                    $this->newLinks[$item->link] = true;
+                                }
+                            }
+                        }
+                    } finally {
+                        fclose($lock);
+                    }
+                }
+            }
+            parent::processFeed($feed);
+        } finally {
+            $this->newLinks = null;
+        }
     }
 
     protected function canFetchPage($url)
     {
+        if ($this->maxFetches === null) {
+            return true;
+        }
         if ($this->fetches >= $this->maxFetches) {
             return false;
+        }
+        if ($this->newLinks !== null) {
+            if (!isset($this->newLinks[$url])) {
+                return false;
+            }
+            unset($this->newLinks[$url]);
         }
         ++$this->fetches;
         return true;

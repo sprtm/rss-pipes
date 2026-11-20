@@ -21,6 +21,12 @@ class PageArticleTest extends \PHPUnit_Framework_TestCase
 
     protected function tearDown()
     {
+        if (is_dir($this->cacheDir . '/seen')) {
+            foreach (glob($this->cacheDir . '/seen/*') as $marker) {
+                unlink($marker);
+            }
+            rmdir($this->cacheDir . '/seen');
+        }
         foreach (glob($this->cacheDir . '/*') as $path) {
             unlink($path);
         }
@@ -348,7 +354,9 @@ class PageArticleTest extends \PHPUnit_Framework_TestCase
         foreach ([[new Rss(), $rss], [new Atom(), $atom]] as $source) {
             $feed = new Feed();
             $source[0]->parseBody($source[1], $feed);
+            $feed->items[0]->link .= $source[0] instanceof Atom ? "/atom" : "/rss";
             $section = new PageArticleStub();
+            $section->cacheDir = $this->cacheDir;
             $section->body = '<section itemprop="articleBody">Article text.</section>';
             $section->processFeed($feed);
             $this->assertSame('<p>Article text.</p>', $feed->items[0]->description);
@@ -385,14 +393,30 @@ class PageArticleTest extends \PHPUnit_Framework_TestCase
         Section::create(['type' => 'pageArticle'] + $options);
     }
 
-    public function testNewStoriesAndBacklogShareTheFetchLimit()
+    public function testOmittedLimitFetchesAllUncachedArticles()
+    {
+        $section = new PageArticleStub();
+        $section->cache = true;
+        $section->cacheDir = $this->cacheDir;
+        $section->body = '<article itemprop="articleBody">Story</article>';
+        $feed = new Feed();
+        foreach (range(1, 7) as $id) {
+            $feed->items[] = $this->item('Excerpt', 'https://example.com/' . $id);
+        }
+        $section->processFeed($feed);
+        $this->assertCount(7, $section->urls);
+        $section->processFeed($feed);
+        $this->assertCount(7, $section->urls);
+    }
+
+    public function testOnlyNewStoriesUseTheFetchLimit()
     {
         $section = new PageArticleStub();
         $section->maxFetches = 2;
         $section->cache = true;
         $section->cacheDir = $this->cacheDir;
         $section->body = '<article itemprop="articleBody">Story</article>';
-        foreach ([[3, 2, 1], [4, 3, 2, 1]] as $ids) {
+        foreach ([[3, 2, 1], [3, 2, 1], [4, 3, 2, 1]] as $ids) {
             $feed = new Feed();
             foreach ($ids as $id) {
                 $feed->items[] = $this->item('Excerpt', 'https://www.dn.se/' . $id);
@@ -403,8 +427,9 @@ class PageArticleTest extends \PHPUnit_Framework_TestCase
             }
         }
         $this->assertSame(['https://www.dn.se/3', 'https://www.dn.se/2',
-            'https://www.dn.se/4', 'https://www.dn.se/1'], $section->urls);
-        foreach ($feed->items as $item) {
+            'https://www.dn.se/4'], $section->urls);
+        $this->assertSame('Excerpt', $feed->items[3]->description);
+        foreach (array_slice($feed->items, 0, 3) as $item) {
             $this->assertContains('Story', $item->description);
         }
     }

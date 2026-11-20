@@ -56,9 +56,10 @@ Uses the same source-request error handling as `rss`, and expects Atom XML.
 
 ### PageArticle
 
-By default, each run attempts up to five uncached articles in feed order.
-Set `maxFetches` on the `pageArticle` section to adjust this limit. Cache hits
-use no slots. Deferred items keep their feed summaries until a later run.
+By default, each run fetches all eligible uncached articles. For a publisher
+that limits requests, set `maxFetches` to cap newly seen articles per run. Cache hits
+use no slots. Items beyond the limit keep their summaries on subsequent refreshes. Keep the
+article cache directory persistent to preserve seen-link history.
 
 Replaces each item's description with article text from its linked webpage.
 Works after `rss`, `atom`, or `pipe` sections:
