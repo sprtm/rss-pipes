@@ -18,7 +18,7 @@ class PageArticle extends PageDescription
     protected $sectionType = 'pageArticle';
     protected $cacheDirectory = 'rss-pipes-page-articles';
     // Separate representations even when both section types share a cacheDir.
-    protected $cachePrefix = 'article-v5-';
+    protected $cachePrefix = 'article-v6-';
 
     public function init()
     {
@@ -306,6 +306,11 @@ class PageArticle extends PageDescription
 
     private function isExcluded(\DOMElement $node)
     {
+        // DN inserts an account promotion between the introduction and body.
+        if ($node->getAttribute('data-component-type') === 'login infobox' ||
+            preg_match('/(?:^|\s)login-infobox(?:\s|$)/', $node->getAttribute('class'))) {
+            return true;
+        }
         // Aftonbladet's generated "Snabbversionen" box repeats the article.
         if ($node->getAttribute('data-track-id') === 'article-summary') {
             return true;

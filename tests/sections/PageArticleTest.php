@@ -164,7 +164,7 @@ class PageArticleTest extends \PHPUnit_Framework_TestCase
 
     public function oldArticleCachePrefixesProvider()
     {
-        return [['article-v1-'], ['article-v2-'], ['article-v3-'], ['article-v4-']];
+        return [['article-v1-'], ['article-v2-'], ['article-v3-'], ['article-v4-'], ['article-v5-']];
     }
 
     public function testPublisherOverrideAndMissingOverrideFallback()
@@ -253,6 +253,29 @@ class PageArticleTest extends \PHPUnit_Framework_TestCase
             $section->processItem($item);
             $this->assertSame($method === 'fallback' ? '<p>News summary</p>' : '<p>' . trim($paragraph) . '</p>',
                 $item->description, $method);
+        }
+    }
+
+    public function testDnAccountPromotionIsExcludedWithoutRemovingArticleLists()
+    {
+        $paragraph = str_repeat('This is the article text, with useful information. ', 12);
+        foreach (['markup', 'override', 'readability'] as $method) {
+            foreach (['class="login-infobox"', 'data-component-type="login infobox"'] as $marker) {
+                $section = new PageArticleStub();
+                if ($method === 'override') {
+                    $section->bodyXPath = '//article';
+                }
+                $section->body = '<article' . ($method === 'markup' ? ' itemprop="articleBody"' : '') . '>' .
+                    '<p>' . $paragraph . '</p><div ' . $marker . '><div class="login-infobox__inner">' .
+                    '<h3>Få ut mer av DN som inloggad</h3><p>Du vet väl att du kan skapa ett gratiskonto på DN?</p>' .
+                    '<ul><li>Följ dina intressen</li><li>Nyhetsbrev</li></ul></div></div>' .
+                    '<h3>Article heading</h3><ul><li>Article list item.</li></ul><p>Final paragraph.</p></article>';
+                $item = $this->item();
+                $section->processItem($item);
+                $this->assertSame('<p>' . trim($paragraph) . '</p>' .
+                    "\n<h3>Article heading</h3>\n<ul><li>Article list item.</li></ul>\n<p>Final paragraph.</p>",
+                    $item->description, $method . ': ' . $marker);
+            }
         }
     }
 

@@ -95,7 +95,8 @@ When available, an `article` or `main` element limits the heuristic extraction;
 site footers, print headers, and common interface notices are removed first.
 Figures, captions, and `time` elements are excluded from article text.
 Aftonbladet’s “Snabbversionen” summary box, affiliate advertisement carousels,
-and explicitly marked advertisement slots are also excluded. Existing article
+explicitly marked advertisement slots, and DN’s account-promotion box
+(`login-infobox`) are also excluded. Existing article
 cache entries are refreshed once to apply this filter.
 If no usable article is found, it falls back to `og:description`,
 `twitter:description`, and meta `description`, then keeps the item's own feed
