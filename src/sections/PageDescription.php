@@ -16,6 +16,7 @@ class PageDescription extends Section
     protected $sectionType = 'pageDescription';
     protected $cacheDirectory = 'rss-pipes-page-descriptions';
     protected $cachePrefix = '';
+    private $paywalled;
 
     public function init()
     {
@@ -32,6 +33,7 @@ class PageDescription extends Section
     /** @param Item $item */
     public function processItem($item)
     {
+        $this->paywalled = null;
         if (!is_string($item->link) || !preg_match('~^https?://~i', $item->link)) {
             return;
         }
@@ -39,6 +41,7 @@ class PageDescription extends Section
         $cached = $this->readCache($item->link);
         if ($cached !== null) {
             $description = $cached['description'];
+            $this->paywalled = $cached['paywalled'];
         } else {
             $body = $this->fetchPage($item->link);
             $description = is_string($body) && trim($body) !== '' ? $this->findDescription($body, $item->link) : null;
@@ -47,6 +50,12 @@ class PageDescription extends Section
 
         if ($description !== null) {
             $item->description = $this->formatDescription($description);
+        }
+        if ($this->paywalled === true) {
+            $description = rtrim((string) $item->description);
+            if (!preg_match('~<p>Betalartikel</p>\s*$~u', $description)) {
+                $item->description = $description . ($description === '' ? '' : "\n") . '<p>Betalartikel</p>';
+            }
         }
     }
 
@@ -81,7 +90,8 @@ class PageDescription extends Section
         $body = @file_get_contents($this->cachePath($url));
         $entry = $body === false ? null : json_decode($body, true);
         if (!is_array($entry) || !isset($entry['expiresAt']) || !is_int($entry['expiresAt']) ||
-            $entry['expiresAt'] <= $this->currentTime() || !array_key_exists('description', $entry)) {
+            $entry['expiresAt'] <= $this->currentTime() || !array_key_exists('description', $entry) ||
+            !array_key_exists('paywalled', $entry) || ($entry['paywalled'] !== null && !is_bool($entry['paywalled']))) {
             return null;
         }
         $description = $entry['description'];
@@ -102,7 +112,7 @@ class PageDescription extends Section
         if (!is_dir($directory) && !@mkdir($directory, 0775, true) && !is_dir($directory)) {
             return;
         }
-        $body = json_encode(['expiresAt' => $this->currentTime() + $ttl, 'description' => $description]);
+        $body = json_encode(['expiresAt' => $this->currentTime() + $ttl, 'description' => $description, 'paywalled' => $this->paywalled]);
         if ($body === false || !is_writable($directory)) {
             return;
         }
@@ -133,11 +143,91 @@ class PageDescription extends Section
                 return null;
             }
 
+            $this->paywalled = $this->findPaywallStatus($document);
             return $this->extractFromDocument($document, $url);
         } finally {
             libxml_clear_errors();
             libxml_use_internal_errors($previous);
         }
+    }
+
+    private function findPaywallStatus(\DOMDocument $document)
+    {
+        foreach ($document->getElementsByTagName('script') as $script) {
+            if (strtolower(trim($script->getAttribute('type'))) !== 'application/ld+json') {
+                continue;
+            }
+            $status = $this->structuredPaywallStatus(json_decode($script->textContent, true));
+            if ($status !== null) {
+                return $status;
+            }
+        }
+        return null;
+    }
+
+    private function structuredPaywallStatus($data)
+    {
+        if (!is_array($data)) {
+            return null;
+        }
+        foreach ((array) (isset($data['@type']) ? $data['@type'] : []) as $type) {
+            if (is_string($type) && preg_match('~(?:Article|BlogPosting)$~', $type)) {
+                // Explicitly restricted sections take precedence over a free
+                // introduction. Ignore unrelated objects such as recommendations.
+                if ($this->restrictedPart(isset($data['hasPart']) ? $data['hasPart'] : null)) {
+                    return true;
+                }
+                $free = $this->accessBoolean(isset($data['isAccessibleForFree']) ? $data['isAccessibleForFree'] : null);
+                return $free === null ? null : !$free;
+            }
+        }
+        if (isset($data['@graph'])) {
+            return $this->structuredPaywallStatus($data['@graph']);
+        }
+        if (isset($data['mainEntity'])) {
+            return $this->structuredPaywallStatus($data['mainEntity']);
+        }
+        // Only traverse JSON-LD lists and primary-entity containers, rather than
+        // treating flags on publishers, events, or related stories as evidence.
+        foreach ($data as $key => $value) {
+            if (is_int($key)) {
+                $status = $this->structuredPaywallStatus($value);
+                if ($status !== null) {
+                    return $status;
+                }
+            }
+        }
+        return null;
+    }
+
+    private function restrictedPart($part)
+    {
+        if (!is_array($part)) {
+            return false;
+        }
+        if ($this->accessBoolean(isset($part['isAccessibleForFree']) ? $part['isAccessibleForFree'] : null) === false) {
+            return true;
+        }
+        foreach ($part as $key => $value) {
+            if ((is_int($key) || $key === 'hasPart') && $this->restrictedPart($value)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private function accessBoolean($value)
+    {
+        if (is_bool($value)) {
+            return $value;
+        }
+        if (is_string($value)) {
+            switch (strtolower(trim($value))) {
+                case 'true': return true;
+                case 'false': return false;
+            }
+        }
+        return null;
     }
 
     protected function extractFromDocument(\DOMDocument $document, $url = null)

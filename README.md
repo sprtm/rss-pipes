@@ -115,6 +115,19 @@ Uses the PHP 7-compatible `andreskrey/readability.php` library. Run
 `composer install` after updating; its dependencies require PHP's DOM, XML, and
 mbstring extensions.
 
+Both `pageArticle` and `pageDescription` append `Betalartikel` as a separate final
+HTML paragraph when the downloaded page's JSON-LD explicitly marks the article
+or one of its `hasPart` sections as not accessible for free. Boolean `false` and
+string values such as `"False"` are recognized. Missing metadata, short excerpts,
+and failed requests do not identify a paywall and do not add a label. The label
+does not indicate whether the extracted text is complete. Detection also works
+when only a page summary or the original feed excerpt is available.
+
+Paywall status is cached with the text and adds no page requests during normal
+processing. Older cache entries without this status are refetched once to discover
+it. The note is added when serving the item, so cached text does not accumulate
+duplicate notes. RSS and JSON include it in `description`; `comments` is unchanged.
+
 ### PageDescription
 
 Optionally replaces each item's description with metadata from its linked webpage.
