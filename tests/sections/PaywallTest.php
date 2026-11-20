@@ -111,6 +111,101 @@ class PaywallTest extends \PHPUnit_Framework_TestCase
         }
     }
 
+    /** @dataProvider articleAccessProvider */
+    public function testPrimaryArticleAccessCanOverrideGenericRestrictionMetadata($access, $id, $labelled)
+    {
+        foreach ($this->sections() as $section) {
+            $section->body = $this->html(['@type' => 'NewsArticle', 'isAccessibleForFree' => false,
+                'hasPart' => ['@type' => 'WebPageElement', 'isAccessibleForFree' => false, 'cssSelector' => '.paywall']]) .
+                '<script type="application/json" id="' . $id . '">' . json_encode($access) . '</script>';
+            $item = $this->item();
+            $section->processItem($item);
+            $expected = $section instanceof PageArticle ? '<p>Article text.</p>' : 'Summary';
+            $this->assertSame($expected . ($labelled ? "\n<p>Betalartikel</p>" : ''), $item->description);
+        }
+    }
+
+    public function articleAccessProvider()
+    {
+        return [
+            [['accessLevel' => 'Meter', 'accessLevelName' => 'meter'], 'article-pulse-data', false],
+            [['accessLevelName' => 'Metered'], 'article-pulse-data', false],
+            [['accessLevel' => 'Free'], 'article-pulse-data', false],
+            [['accessLevel' => 'Paid'], 'article-pulse-data', true],
+            [['accessLevel' => 'unknown'], 'article-pulse-data', true],
+            [['accessLevel' => 'Meter'], 'unrelated-tracking-data', true],
+        ];
+    }
+
+    /** @dataProvider liveUpdateLinksProvider */
+    public function testLiveUpdatesKeepOriginalDescriptionsAndBypassEvenExistingPageCaches($url)
+    {
+        foreach ($this->sections() as $section) {
+            $section->cache = true;
+            $section->cacheDir = $this->cacheDir;
+            $prefix = $section instanceof PageArticle ? 'article-v2-' : '';
+            $path = $this->cacheDir . '/' . $prefix . hash('sha256', $url) . '.json';
+            $cached = json_encode(['expiresAt' => 100000, 'description' => 'Entire unrelated live blog',
+                'paywalled' => true, 'paywallVersion' => 2]);
+            file_put_contents($path, $cached);
+            $section->body = $this->html(['@type' => 'NewsArticle', 'isAccessibleForFree' => false]);
+            $item = $this->item('<p>Original <strong>live update</strong> &amp; details.</p>', $url);
+            $before = $item->getData();
+            $section->processItem($item);
+            $this->assertSame($before, $item->getData());
+            $this->assertSame([], $section->urls);
+            $this->assertSame($cached, file_get_contents($path));
+        }
+    }
+
+    public function liveUpdateLinksProvider()
+    {
+        return [
+            ['https://www.svd.se/a/wA9Gmd/senaste-nytt?pinnedEntry=80116'],
+            ['https://www.svd.se/a/wA9Gmd/senaste-nytt?source=rss&pinnedEntry=80116'],
+            ['https://example.com/live?pinnedEntry='],
+            ['https://example.com/live?pinnedEntry[]=80116'],
+            ['https://www.expressen.se/nyheter/expressen-direkt/?post=example-update'],
+        ];
+    }
+
+    public function testOrdinaryLinksAreNotSkippedBecauseOfSimilarWords()
+    {
+        foreach ($this->sections() as $section) {
+            $section->body = $this->html(['@type' => 'NewsArticle', 'isAccessibleForFree' => true]);
+            $item = $this->item('Feed excerpt', 'https://example.com/post/article?source=pinnedEntry&postcard=1');
+            $section->processItem($item);
+            $expected = $section instanceof PageArticle ? '<p>Article text.</p>' : 'Summary';
+            $this->assertSame($expected, $item->description);
+            $this->assertCount(1, $section->urls);
+        }
+    }
+
+    public function testPreviouslyMislabelledCacheIsRefetchedAndCorrected()
+    {
+        foreach ($this->sections() as $section) {
+            $section->cache = true;
+            $section->cacheDir = $this->cacheDir;
+            $prefix = $section instanceof PageArticle ? 'article-v2-' : '';
+            $path = $this->cacheDir . '/' . $prefix . hash('sha256', 'https://example.com/article') . '.json';
+            file_put_contents($path, json_encode(['expiresAt' => 100000, 'description' => 'Old text',
+                'paywalled' => true, 'paywallVersion' => 1]));
+            $section->body = $this->html(['@type' => 'NewsArticle', 'isAccessibleForFree' => false]) .
+                '<script type="application/json" id="article-pulse-data">{"accessLevel":"Meter"}</script>';
+            $item = $this->item();
+            $section->processItem($item);
+            $expected = $section instanceof PageArticle ? '<p>Article text.</p>' : 'Summary';
+            $this->assertSame($expected, $item->description);
+            $this->assertCount(1, $section->urls);
+            $this->assertNull(json_decode(file_get_contents($path), true)['paywalled']);
+
+            $section->body = false;
+            $section->processItem($item);
+            $this->assertSame($expected, $item->description);
+            $this->assertCount(1, $section->urls);
+        }
+    }
+
     public function testPaywalledPageWithoutExtractableTextAnnotatesEachOriginalExcerpt()
     {
         foreach ($this->sections() as $section) {

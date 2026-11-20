@@ -103,7 +103,7 @@ class PageArticleTest extends \PHPUnit_Framework_TestCase
     }
 
     /** @dataProvider linkedPostsProvider */
-    public function testLiveBlogExtractsOnlyTheRequestedPost($attribute)
+    public function testLiveBlogKeepsFeedExcerptEvenWhenPostMarkupIsAvailable($attribute)
     {
         $section = new PageArticleStub();
         $section->body = '<meta name="description" content="Whole blog summary"><main itemprop="articleBody">' .
@@ -112,8 +112,8 @@ class PageArticleTest extends \PHPUnit_Framework_TestCase
             '<section><p>Another unrelated story.</p></section></main>';
         $item = $this->item('Original excerpt', 'https://example.com/live?post=selected');
         $section->processItem($item);
-        $this->assertSame("<p>Requested update.</p>\n<p>Second paragraph.</p>", $item->description);
-        $this->assertCount(1, $section->urls);
+        $this->assertSame('Original excerpt', $item->description);
+        $this->assertSame([], $section->urls);
     }
 
     public function linkedPostsProvider()
@@ -122,7 +122,7 @@ class PageArticleTest extends \PHPUnit_Framework_TestCase
             ['data-id="selected"'], ['data-post-id="selected"'], ['data-entry-id="selected"']];
     }
 
-    public function testUnidentifiedLivePostKeepsEachFeedExcerptIncludingCachedFailures()
+    public function testLivePostKeepsEachFeedExcerptWithoutFetchingOrCaching()
     {
         $section = new PageArticleStub();
         $section->cache = true;
@@ -136,7 +136,8 @@ class PageArticleTest extends \PHPUnit_Framework_TestCase
         $item = $this->item('Another excerpt', 'https://example.com/live?post=missing');
         $section->processItem($item);
         $this->assertSame('Another excerpt', $item->description);
-        $this->assertCount(1, $section->urls);
+        $this->assertSame([], $section->urls);
+        $this->assertSame([], glob($this->cacheDir . '/*'));
     }
 
     public function testPreviousArticleCacheVersionIsIgnored()

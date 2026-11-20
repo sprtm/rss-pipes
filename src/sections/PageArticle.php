@@ -54,16 +54,6 @@ class PageArticle extends PageDescription
 
     protected function extractFromDocument(\DOMDocument $document, $url = null)
     {
-        if (is_string($url)) {
-            $query = parse_url($url, PHP_URL_QUERY);
-            $parameters = [];
-            parse_str(is_string($query) ? $query : '', $parameters);
-            if (array_key_exists('post', $parameters)) {
-                // These URLs identify one live-blog update, not the whole page.
-                // Page metadata and generic articleBody can describe other posts.
-                return $this->linkedPostText($document, $parameters['post']);
-            }
-        }
         $xpath = new \DOMXPath($document);
         $queries = [];
         if ($this->bodyXPath !== null) {
@@ -127,30 +117,6 @@ class PageArticle extends PageDescription
         }
 
         return parent::extractFromDocument($document);
-    }
-
-    private function linkedPostText(\DOMDocument $document, $postId)
-    {
-        if (!is_string($postId) || trim($postId) === '') {
-            return null;
-        }
-        $xpath = new \DOMXPath($document);
-        $nodes = $xpath->query('//*[@id or @data-id or @data-post-id or @data-entry-id]');
-        foreach ($nodes as $node) {
-            $matches = in_array($node->getAttribute('id'), [$postId, 'post-' . $postId, 'entry-' . $postId], true);
-            foreach (['data-id', 'data-post-id', 'data-entry-id'] as $attribute) {
-                $matches = $matches || $node->getAttribute($attribute) === $postId;
-            }
-            if ($matches) {
-                $text = $this->articleText($node);
-                if ($text !== '') {
-                    return $text;
-                }
-            }
-        }
-        // Returning null preserves each item's own RSS/Atom excerpt, including
-        // on a failure-cache hit. Never substitute metadata for the whole blog.
-        return null;
     }
 
     private function readabilityHtml(\DOMDocument $document)

@@ -7,6 +7,8 @@ use rsspipes\rss\Item;
 /** Replaces item descriptions with metadata from their linked webpages. */
 class PageDescription extends Section
 {
+    private const PAYWALL_CACHE_VERSION = 2;
+
     public $cache = true;
     public $cacheDir;
     public $cacheTtl = 86400;
@@ -35,6 +37,14 @@ class PageDescription extends Section
     {
         $this->paywalled = null;
         if (!is_string($item->link) || !preg_match('~^https?://~i', $item->link)) {
+            return;
+        }
+        $query = parse_url($item->link, PHP_URL_QUERY);
+        $parameters = [];
+        parse_str(is_string($query) ? $query : '', $parameters);
+        if (array_key_exists('pinnedEntry', $parameters) || array_key_exists('post', $parameters)) {
+            // These links point into a chat/live blog. Its HTML and cached page
+            // text can contain many other updates; retain the feed's excerpt.
             return;
         }
 
@@ -91,6 +101,7 @@ class PageDescription extends Section
         $entry = $body === false ? null : json_decode($body, true);
         if (!is_array($entry) || !isset($entry['expiresAt']) || !is_int($entry['expiresAt']) ||
             $entry['expiresAt'] <= $this->currentTime() || !array_key_exists('description', $entry) ||
+            !isset($entry['paywallVersion']) || $entry['paywallVersion'] !== self::PAYWALL_CACHE_VERSION ||
             !array_key_exists('paywalled', $entry) || ($entry['paywalled'] !== null && !is_bool($entry['paywalled']))) {
             return null;
         }
@@ -112,7 +123,8 @@ class PageDescription extends Section
         if (!is_dir($directory) && !@mkdir($directory, 0775, true) && !is_dir($directory)) {
             return;
         }
-        $body = json_encode(['expiresAt' => $this->currentTime() + $ttl, 'description' => $description, 'paywalled' => $this->paywalled]);
+        $body = json_encode(['expiresAt' => $this->currentTime() + $ttl, 'description' => $description,
+            'paywalled' => $this->paywalled, 'paywallVersion' => self::PAYWALL_CACHE_VERSION]);
         if ($body === false || !is_writable($directory)) {
             return;
         }
@@ -153,6 +165,31 @@ class PageDescription extends Section
 
     private function findPaywallStatus(\DOMDocument $document)
     {
+        // SvD and other publishers distinguish a reading quota from an
+        // unconditional subscription requirement in their primary article data.
+        // Metered articles can still have isAccessibleForFree=false in JSON-LD.
+        foreach ($document->getElementsByTagName('script') as $script) {
+            if ($script->getAttribute('id') !== 'article-pulse-data' ||
+                strtolower(trim($script->getAttribute('type'))) !== 'application/json') {
+                continue;
+            }
+            $data = json_decode($script->textContent, true);
+            if (!is_array($data)) {
+                continue;
+            }
+            foreach (['accessLevel', 'accessLevelName'] as $key) {
+                if (!isset($data[$key]) || !is_string($data[$key])) {
+                    continue;
+                }
+                $level = strtolower(trim($data[$key]));
+                if (in_array($level, ['meter', 'metered'], true)) {
+                    return null;
+                }
+                if ($level === 'free') {
+                    return false;
+                }
+            }
+        }
         foreach ($document->getElementsByTagName('script') as $script) {
             if (strtolower(trim($script->getAttribute('type'))) !== 'application/ld+json') {
                 continue;

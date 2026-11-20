@@ -73,12 +73,12 @@ If no usable article is found, it falls back to `og:description`,
 description. Do not add `pageDescription` after `pageArticle`, as that would
 replace the article text with a summary.
 
-For live-blog links containing `?post=...`, extraction is restricted to a matching
-HTML `id` (the post ID, `post-ID`, or `entry-ID`), `data-id`, `data-post-id`, or
-`data-entry-id`. If no matching post can be identified, the item's own feed
-description is preserved. The whole blog and its page metadata are not used as
-substitutes for a single update. Other live-blog URL formats are not yet handled
-specially. JSON descriptions contain the same HTML as RSS descriptions. Existing
+For chat/live-blog links containing a `pinnedEntry` or `post` query parameter,
+both `pageArticle` and `pageDescription` preserve the original feed description
+without requesting the page or using cached page text. These links identify a
+single update, while the page can contain many unrelated updates. Other live-blog
+URL formats are not yet handled specially.
+JSON descriptions contain the same HTML as RSS descriptions. Existing
 article cache entries store text and receive the formatting when served, so this
 formatting change requires no cache clearing or extra article requests.
 
@@ -122,10 +122,13 @@ string values such as `"False"` are recognized. Missing metadata, short excerpts
 and failed requests do not identify a paywall and do not add a label. The label
 does not indicate whether the extracted text is complete. Detection also works
 when only a page summary or the original feed excerpt is available.
+When primary article access data (`article-pulse-data`) explicitly says `Meter`
+or `Metered`, no label is added: availability depends on the reader's quota.
+An explicit `Free` access level also suppresses a conflicting JSON-LD restriction.
 
 Paywall status is cached with the text and adds no page requests during normal
-processing. Older cache entries without this status are refetched once to discover
-it. The note is added when serving the item, so cached text does not accumulate
+processing. Older cache entries without this status or with an outdated detection
+version are refetched once to update it. The note is added when serving the item, so cached text does not accumulate
 duplicate notes. RSS and JSON include it in `description`; `comments` is unchanged.
 
 ### PageDescription
