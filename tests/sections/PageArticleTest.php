@@ -46,20 +46,20 @@ class PageArticleTest extends \PHPUnit_Framework_TestCase
     public function articlesProvider()
     {
         return [
-            ['<meta name="description" content="Summary"><section itemprop="articleBody"><p>First <b>bold </b>word.</p><p>ÅÄÖ &amp; blåbär.</p></section>', "First bold word.\n\nÅÄÖ & blåbär."],
-            ['<div itemprop="text articleBody"><p>First</p><div itemprop="articleBody"><p>Second</p></div></div>', "First\n\nSecond"],
-            ['<section itemprop="articleBody"><p>First</p></section><section itemprop="articleBody"><p>Second</p></section>', "First\n\nSecond"],
-            ['<section itemprop="articleBody"><table><tr><th>Name</th><th>Score</th></tr><tr><td>Club</td><td>3</td></tr></table></section>', "Name Score\n\nClub 3"],
-            ['<section itemprop="articleBody"><time>Published yesterday</time><p>Actual story.</p><figure><figcaption>Video promotion and photo credit.</figcaption></figure><p>Final paragraph.</p></section>', "Actual story.\n\nFinal paragraph."],
-            ['<section itemprop="articleBody"><p>Line<br>break</p><p><i>More</i> text.</p><script>alert(1)</script><nav>Menu</nav><aside>Related</aside><form>Subscribe</form><footer>Footer</footer><p hidden>Hidden</p><p aria-hidden="true">Hidden</p></section>', "Line\nbreak\n\nMore text."],
-            ['<script type="application/ld+json">{"@graph":[{"@type":"NewsArticle","articleBody":"First paragraph.\n\nSecond &amp; final paragraph."}]}</script>', "First paragraph.\n\nSecond & final paragraph."],
-            ['<script type="application/ld+json">[{"@type":["Thing","https://schema.org/BlogPosting"],"articleBody":"<p>Café</p><p>日本語</p>"}]</script>', "Café\n\n日本語"],
-            ['<script type="application/ld+json">{"@type":"Product","articleBody":"Unrelated"}</script><meta name="description" content="Summary">', 'Summary'],
-            ['<script type="application/ld+json">invalid</script><meta property="og:description" content="OpenGraph"><meta name="description" content="Standard">', 'OpenGraph'],
-            ['<script type="application/ld+json">{"@type":"Article","articleBody":"&nbsp;"}</script><meta name="description" content="Summary">', 'Summary'],
-            ['<section itemprop="articleBody"><script>hidden()</script></section><meta name="twitter:description" content="Twitter">', 'Twitter'],
-            ["<meta charset='ISO-8859-1'><section itemprop='articleBody'><p>\xC5\xC4\xD6 \xE5\xE4\xF6</p></section>", 'ÅÄÖ åäö'],
-            ['<article><p>Too short for heuristic extraction.</p></article><meta name="description" content="Summary">', 'Summary'],
+            ['<meta name="description" content="Summary"><section itemprop="articleBody"><p>First <b>bold </b>word.</p><p>ÅÄÖ &amp; blåbär.</p></section>', '<p>First bold word.</p>' . "\n" . '<p>ÅÄÖ &amp; blåbär.</p>'],
+            ['<div itemprop="text articleBody"><p>First</p><div itemprop="articleBody"><p>Second</p></div></div>', "<p>First</p>\n<p>Second</p>"],
+            ['<section itemprop="articleBody"><p>First</p></section><section itemprop="articleBody"><p>Second</p></section>', "<p>First</p>\n<p>Second</p>"],
+            ['<section itemprop="articleBody"><table><tr><th>Name</th><th>Score</th></tr><tr><td>Club</td><td>3</td></tr></table></section>', "<p>Name Score</p>\n<p>Club 3</p>"],
+            ['<section itemprop="articleBody"><time>Published yesterday</time><p>Actual story.</p><figure><figcaption>Video promotion and photo credit.</figcaption></figure><p>Final paragraph.</p></section>', "<p>Actual story.</p>\n<p>Final paragraph.</p>"],
+            ['<section itemprop="articleBody"><p>Line<br>break</p><p><i>More</i> text.</p><script>alert(1)</script><nav>Menu</nav><aside>Related</aside><form>Subscribe</form><footer>Footer</footer><p hidden>Hidden</p><p aria-hidden="true">Hidden</p></section>', "<p>Line<br>break</p>\n<p>More text.</p>"],
+            ['<script type="application/ld+json">{"@graph":[{"@type":"NewsArticle","articleBody":"First paragraph.\n\nSecond &amp; final paragraph."}]}</script>', "<p>First paragraph.</p>\n<p>Second &amp; final paragraph.</p>"],
+            ['<script type="application/ld+json">[{"@type":["Thing","https://schema.org/BlogPosting"],"articleBody":"<p>Café</p><p>日本語</p>"}]</script>', "<p>Café</p>\n<p>日本語</p>"],
+            ['<script type="application/ld+json">{"@type":"Product","articleBody":"Unrelated"}</script><meta name="description" content="Summary">', '<p>Summary</p>'],
+            ['<script type="application/ld+json">invalid</script><meta property="og:description" content="OpenGraph"><meta name="description" content="Standard">', '<p>OpenGraph</p>'],
+            ['<script type="application/ld+json">{"@type":"Article","articleBody":"&nbsp;"}</script><meta name="description" content="Summary">', '<p>Summary</p>'],
+            ['<section itemprop="articleBody"><script>hidden()</script></section><meta name="twitter:description" content="Twitter">', '<p>Twitter</p>'],
+            ["<meta charset='ISO-8859-1'><section itemprop='articleBody'><p>\xC5\xC4\xD6 \xE5\xE4\xF6</p></section>", '<p>ÅÄÖ åäö</p>'],
+            ['<article><p>Too short for heuristic extraction.</p></article><meta name="description" content="Summary">', '<p>Summary</p>'],
             ['<html><body><nav>Menu</nav></body></html>', 'Feed excerpt'],
             ['', 'Feed excerpt'],
             [false, 'Feed excerpt'],
@@ -75,7 +75,31 @@ class PageArticleTest extends \PHPUnit_Framework_TestCase
             '<aside><a href="/other">Unrelated stories</a></aside><footer>Site footer</footer></body></html>';
         $item = $this->item();
         $section->processItem($item);
-        $this->assertSame(trim($paragraph) . "\n\nFinal paragraph.", $item->description);
+        $this->assertSame('<p>' . trim($paragraph) . "</p>\n<p>Final paragraph.</p>", $item->description);
+    }
+
+    public function testHtmlParagraphsSurviveRssJsonAndCacheWithoutExposingSourceMarkup()
+    {
+        $section = new PageArticleStub();
+        $section->cache = true;
+        $section->cacheDir = $this->cacheDir;
+        $section->body = '<section itemprop="articleBody"><p>First &amp; second.</p>' .
+            '<p>&lt;img src=x onerror=bad&gt;<br>Final.</p></section>';
+        $expected = "<p>First &amp; second.</p>\n<p>&lt;img src=x onerror=bad&gt;<br>Final.</p>";
+        $feed = new Feed();
+        $feed->items[] = $this->item();
+        $section->processFeed($feed);
+        $this->assertSame($expected, $feed->items[0]->description);
+
+        $xml = new \SimpleXMLElement((new \rsspipes\builder\RssBuilder())->buildFeed($feed));
+        $this->assertSame($expected, (string) $xml->channel->item->description);
+        $json = json_decode((new \rsspipes\builder\JsonBuilder())->buildFeed($feed), true);
+        $this->assertSame($expected, $json['items'][0]['description']);
+
+        $section->body = false;
+        $section->processFeed($feed);
+        $this->assertSame($expected, $feed->items[0]->description);
+        $this->assertCount(1, $section->urls);
     }
 
     /** @dataProvider linkedPostsProvider */
@@ -88,7 +112,7 @@ class PageArticleTest extends \PHPUnit_Framework_TestCase
             '<section><p>Another unrelated story.</p></section></main>';
         $item = $this->item('Original excerpt', 'https://example.com/live?post=selected');
         $section->processItem($item);
-        $this->assertSame("Requested update.\n\nSecond paragraph.", $item->description);
+        $this->assertSame("<p>Requested update.</p>\n<p>Second paragraph.</p>", $item->description);
         $this->assertCount(1, $section->urls);
     }
 
@@ -126,7 +150,7 @@ class PageArticleTest extends \PHPUnit_Framework_TestCase
         $section->body = '<section itemprop="articleBody"><p>Clean article.</p></section>';
         $item = $this->item();
         $section->processItem($item);
-        $this->assertSame('Clean article.', $item->description);
+        $this->assertSame('<p>Clean article.</p>', $item->description);
         $this->assertCount(1, $section->urls);
     }
 
@@ -138,10 +162,10 @@ class PageArticleTest extends \PHPUnit_Framework_TestCase
         $section->body = '<div id="story"><p>Selected article.</p></div><section itemprop="articleBody">Other article.</section>';
         $item = $this->item();
         $section->processItem($item);
-        $this->assertSame('Selected article.', $item->description);
+        $this->assertSame('<p>Selected article.</p>', $item->description);
         $section->bodyXPath = '//div[@id="missing"]';
         $section->processItem($item);
-        $this->assertSame('Other article.', $item->description);
+        $this->assertSame('<p>Other article.</p>', $item->description);
     }
 
     public function testReadabilityPreservesLegacyPageEncoding()
@@ -152,7 +176,7 @@ class PageArticleTest extends \PHPUnit_Framework_TestCase
             $paragraph . '</p></article></body></html>', 'ISO-8859-1', 'UTF-8');
         $item = $this->item();
         $section->processItem($item);
-        $this->assertSame(trim($paragraph), $item->description);
+        $this->assertSame('<p>' . trim($paragraph) . '</p>', $item->description);
     }
 
     public function testMissingArticleDoesNotExtractLongSiteFooter()
@@ -163,7 +187,7 @@ class PageArticleTest extends \PHPUnit_Framework_TestCase
             str_repeat('This newspaper reports on local and world news. ', 20) . '</p></div></main></body></html>';
         $item = $this->item();
         $section->processItem($item);
-        $this->assertSame('Article summary', $item->description);
+        $this->assertSame('<p>Article summary</p>', $item->description);
     }
 
     public function testReadabilityExcludesPrintHeadersAndEditorialNotices()
@@ -175,7 +199,7 @@ class PageArticleTest extends \PHPUnit_Framework_TestCase
             '<section class="TransparencyBox__root"><p>' . str_repeat('Our editorial policy. ', 20) . '</p></section></article>';
         $item = $this->item();
         $section->processItem($item);
-        $this->assertSame(trim($paragraph), $item->description);
+        $this->assertSame('<p>' . trim($paragraph) . '</p>', $item->description);
     }
 
     public function testMissingPrimaryArticleDoesNotExtractRelatedArticle()
@@ -186,7 +210,7 @@ class PageArticleTest extends \PHPUnit_Framework_TestCase
             str_repeat('A different story, linked beneath the main article. ', 20) . '</p></article></body></html>';
         $item = $this->item();
         $section->processItem($item);
-        $this->assertSame('Primary summary', $item->description);
+        $this->assertSame('<p>Primary summary</p>', $item->description);
     }
 
     public function testArticleCacheIsSharedExpiresAndDoesNotCollideWithDescriptions()
@@ -211,11 +235,11 @@ class PageArticleTest extends \PHPUnit_Framework_TestCase
         $next->body = '<section itemprop="articleBody">Updated article.</section>';
         $item = $this->item();
         $next->processItem($item);
-        $this->assertSame('Cached article.', $item->description);
+        $this->assertSame('<p>Cached article.</p>', $item->description);
         $this->assertSame([], $next->urls);
         $next->now++;
         $next->processItem($item);
-        $this->assertSame('Updated article.', $item->description);
+        $this->assertSame('<p>Updated article.</p>', $item->description);
         $this->assertCount(1, $next->urls);
     }
 
@@ -234,7 +258,7 @@ class PageArticleTest extends \PHPUnit_Framework_TestCase
         $this->assertCount(1, $section->urls);
         $section->now++;
         $section->processItem($item);
-        $this->assertSame('Recovered article.', $item->description);
+        $this->assertSame('<p>Recovered article.</p>', $item->description);
         $this->assertCount(2, $section->urls);
     }
 
@@ -247,10 +271,10 @@ class PageArticleTest extends \PHPUnit_Framework_TestCase
         $section->bodyXPath = '//div[@id="first"]';
         $item = $this->item();
         $section->processItem($item);
-        $this->assertSame('First article.', $item->description);
+        $this->assertSame('<p>First article.</p>', $item->description);
         $section->bodyXPath = '//div[@id="second"]';
         $section->processItem($item);
-        $this->assertSame('Second article.', $item->description);
+        $this->assertSame('<p>Second article.</p>', $item->description);
         $this->assertCount(2, $section->urls);
         $this->assertCount(2, glob($this->cacheDir . '/*'));
     }
@@ -265,7 +289,7 @@ class PageArticleTest extends \PHPUnit_Framework_TestCase
         $section->processItem($item);
         $section->body = false;
         $section->processItem($item);
-        $this->assertSame('Page summary', $item->description);
+        $this->assertSame('<p>Page summary</p>', $item->description);
         $this->assertCount(1, $section->urls);
     }
 
@@ -279,7 +303,7 @@ class PageArticleTest extends \PHPUnit_Framework_TestCase
             $section = new PageArticleStub();
             $section->body = '<section itemprop="articleBody">Article text.</section>';
             $section->processFeed($feed);
-            $this->assertSame('Article text.', $feed->items[0]->description);
+            $this->assertSame('<p>Article text.</p>', $feed->items[0]->description);
         }
     }
 

@@ -46,8 +46,13 @@ class PageDescription extends Section
         }
 
         if ($description !== null) {
-            $item->description = $description;
+            $item->description = $this->formatDescription($description);
         }
+    }
+
+    protected function formatDescription($description)
+    {
+        return $description;
     }
 
     protected function fetchPage($url)

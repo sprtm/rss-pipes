@@ -39,6 +39,19 @@ class PageArticle extends PageDescription
         return parent::cachePath($this->bodyXPath === null ? $url : $url . "\0bodyXPath\0" . $this->bodyXPath);
     }
 
+    protected function formatDescription($description)
+    {
+        // Cache extracted text; format on delivery so existing cache entries
+        // gain paragraphs too, without refetching or wrapping HTML twice.
+        $paragraphs = explode("\n\n", $this->normalizeText($description));
+        foreach ($paragraphs as &$paragraph) {
+            $paragraph = '<p>' . str_replace("\n", '<br>',
+                htmlspecialchars($paragraph, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')) . '</p>';
+        }
+        unset($paragraph);
+        return implode("\n", $paragraphs);
+    }
+
     protected function extractFromDocument(\DOMDocument $document, $url = null)
     {
         if (is_string($url)) {

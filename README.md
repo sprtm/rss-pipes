@@ -59,7 +59,10 @@ Works after `rss`, `atom`, or `pipe` sections:
 
 Extraction uses explicit `itemprop="articleBody"` markup first, then JSON-LD
 `articleBody` on articles and blog posts, then Readability's general article
-extractor. The result is plain text with paragraph breaks; scripts, navigation,
+extractor. Extracted text is delivered as safe HTML using `<p>` paragraphs and
+`<br>` line breaks, so RSS readers retain the spacing. Text is escaped before
+these tags are added; the publisher's original HTML is not passed through.
+Scripts, navigation,
 forms, and other non-article elements are discarded. Readability results shorter
 than 200 characters are ignored to reduce accidental extraction of page controls.
 When available, an `article` or `main` element limits the heuristic extraction;
@@ -75,8 +78,9 @@ HTML `id` (the post ID, `post-ID`, or `entry-ID`), `data-id`, `data-post-id`, or
 `data-entry-id`. If no matching post can be identified, the item's own feed
 description is preserved. The whole blog and its page metadata are not used as
 substitutes for a single update. Other live-blog URL formats are not yet handled
-specially. JSON output shows paragraph breaks as escaped `\n\n`; a JSON viewer
-or consuming application must render those breaks for readable presentation.
+specially. JSON descriptions contain the same HTML as RSS descriptions. Existing
+article cache entries store text and receive the formatting when served, so this
+formatting change requires no cache clearing or extra article requests.
 
 No publisher settings are required by default. For a site whose article is not
 identified correctly, an optional XPath expression can select its body before
