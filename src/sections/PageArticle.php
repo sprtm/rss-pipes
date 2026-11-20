@@ -15,7 +15,7 @@ class PageArticle extends PageDescription
     protected $sectionType = 'pageArticle';
     protected $cacheDirectory = 'rss-pipes-page-articles';
     // Separate representations even when both section types share a cacheDir.
-    protected $cachePrefix = 'article-v3-';
+    protected $cachePrefix = 'article-v4-';
 
     public function init()
     {
@@ -239,6 +239,10 @@ class PageArticle extends PageDescription
 
     private function isExcluded(\DOMElement $node)
     {
+        // Aftonbladet's generated "Snabbversionen" box repeats the article.
+        if ($node->getAttribute('data-track-id') === 'article-summary') {
+            return true;
+        }
         if (in_array(strtolower($node->tagName), ['script', 'style', 'noscript', 'template', 'nav', 'aside', 'footer', 'form', 'button', 'dialog', 'iframe', 'svg', 'video', 'audio', 'figure', 'figcaption', 'time', 'head', 'object', 'embed', 'math', 'canvas', 'input', 'select', 'textarea'], true) ||
             $node->hasAttribute('hidden') || strtolower($node->getAttribute('aria-hidden')) === 'true' ||
             in_array($node->getAttribute('role'), ['navigation', 'contentinfo', 'dialog'], true)) {

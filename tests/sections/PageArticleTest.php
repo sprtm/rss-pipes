@@ -158,7 +158,7 @@ class PageArticleTest extends \PHPUnit_Framework_TestCase
 
     public function oldArticleCachePrefixesProvider()
     {
-        return [['article-v1-'], ['article-v2-']];
+        return [['article-v1-'], ['article-v2-'], ['article-v3-']];
     }
 
     public function testPublisherOverrideAndMissingOverrideFallback()
@@ -207,6 +207,25 @@ class PageArticleTest extends \PHPUnit_Framework_TestCase
         $item = $this->item();
         $section->processItem($item);
         $this->assertSame('<p>' . trim($paragraph) . '</p>', $item->description);
+    }
+
+    public function testArticleSummaryBoxIsExcludedFromAllDomExtractionPaths()
+    {
+        $paragraph = str_repeat('This article discusses Snabbversionen, with useful information. ', 12);
+        foreach (['markup', 'override', 'readability'] as $method) {
+            $section = new PageArticleStub();
+            if ($method === 'override') {
+                $section->bodyXPath = '//article';
+            }
+            $section->body = '<article' . ($method === 'markup' ? ' itemprop="articleBody"' : '') . '>' .
+                '<p>' . $paragraph . '</p><section data-track-id="article-summary">' .
+                '<h2>Snabbversionen</h2><ul><li>Generated summary of the story.</li></ul></section>' .
+                '<h2>Article summary</h2><p>Final article paragraph.</p></article>';
+            $item = $this->item();
+            $section->processItem($item);
+            $this->assertSame('<p>' . trim($paragraph) . '</p>' . "\n<h2>Article summary</h2>\n<p>Final article paragraph.</p>",
+                $item->description, $method);
+        }
     }
 
     public function testMissingPrimaryArticleDoesNotExtractRelatedArticle()
