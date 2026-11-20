@@ -56,6 +56,10 @@ Uses the same source-request error handling as `rss`, and expects Atom XML.
 
 ### PageArticle
 
+By default, each run attempts up to five uncached articles in feed order.
+Set `maxFetches` on the `pageArticle` section to adjust this limit. Cache hits
+use no slots. Deferred items keep their feed summaries until a later run.
+
 Replaces each item's description with article text from its linked webpage.
 Works after `rss`, `atom`, or `pipe` sections:
 
@@ -63,6 +67,7 @@ Works after `rss`, `atom`, or `pipe` sections:
 - type: rss
   url: https://example.com/feed.xml
 - type: pageArticle
+  maxFetches: 5
 ```
 
 Extraction uses explicit `itemprop="articleBody"` markup first, then JSON-LD

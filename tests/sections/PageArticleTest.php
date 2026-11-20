@@ -385,6 +385,30 @@ class PageArticleTest extends \PHPUnit_Framework_TestCase
         Section::create(['type' => 'pageArticle'] + $options);
     }
 
+    public function testNewStoriesAndBacklogShareTheFetchLimit()
+    {
+        $section = new PageArticleStub();
+        $section->maxFetches = 2;
+        $section->cache = true;
+        $section->cacheDir = $this->cacheDir;
+        $section->body = '<article itemprop="articleBody">Story</article>';
+        foreach ([[3, 2, 1], [4, 3, 2, 1]] as $ids) {
+            $feed = new Feed();
+            foreach ($ids as $id) {
+                $feed->items[] = $this->item('Excerpt', 'https://www.dn.se/' . $id);
+            }
+            $section->processFeed($feed);
+            if (count($ids) === 3) {
+                $this->assertSame('Excerpt', $feed->items[2]->description);
+            }
+        }
+        $this->assertSame(['https://www.dn.se/3', 'https://www.dn.se/2',
+            'https://www.dn.se/4', 'https://www.dn.se/1'], $section->urls);
+        foreach ($feed->items as $item) {
+            $this->assertContains('Story', $item->description);
+        }
+    }
+
     public function invalidConfigsProvider()
     {
         return [[['timeout' => 0]], [['cache' => 'false']], [['bodyXPath' => '']], [['bodyXPath' => []]], [['bodyXPath' => '//*[']]];

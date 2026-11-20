@@ -41,7 +41,9 @@ class Rss extends Section
         if ($this->showErrors) {
             $feed->metadata += ['title' => 'RSS Pipes: source unavailable',
                 'link' => $this->url, 'description' => 'The source feed could not be loaded.'];
-            $feed->addItem(['title' => $error, 'link' => $this->url]);
+            $item = new Item(['title' => $error, 'link' => $this->url]);
+            $item->sourceError = true;
+            $feed->addItem($item);
         }
     }
 

@@ -6,6 +6,7 @@ use SimpleXMLElement;
 
 class Item
 {
+    public $sourceError = false;
     public $guid;
     public $pubDate;
     public $title;

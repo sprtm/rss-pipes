@@ -36,7 +36,7 @@ class PageDescription extends Section
     public function processItem($item)
     {
         $this->paywalled = null;
-        if (!is_string($item->link) || !preg_match('~^https?://~i', $item->link)) {
+        if ($item->sourceError || !is_string($item->link) || !preg_match('~^https?://~i', $item->link)) {
             return;
         }
         $query = parse_url($item->link, PHP_URL_QUERY);
@@ -54,6 +54,9 @@ class PageDescription extends Section
             $description = $cached['description'];
             $this->paywalled = $cached['paywalled'];
         } else {
+            if (!$this->canFetchPage($item->link)) {
+                return;
+            }
             $body = $this->fetchPage($item->link);
             $description = is_string($body) && trim($body) !== '' ? $this->findDescription($body, $item->link) : null;
             $this->writeCache($item->link, $description);
@@ -73,6 +76,11 @@ class PageDescription extends Section
     protected function formatDescription($description)
     {
         return $description;
+    }
+
+    protected function canFetchPage($url)
+    {
+        return true;
     }
 
     protected function fetchPage($url)

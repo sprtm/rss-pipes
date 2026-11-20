@@ -11,6 +11,8 @@ use rsspipes\html\ArticleHtml;
 class PageArticle extends PageDescription
 {
     public $bodyXPath;
+    public $maxFetches = 5;
+    private $fetches = 0;
 
     protected $sectionType = 'pageArticle';
     protected $cacheDirectory = 'rss-pipes-page-articles';
@@ -20,6 +22,9 @@ class PageArticle extends PageDescription
     public function init()
     {
         parent::init();
+        if (!is_int($this->maxFetches) || $this->maxFetches < 0) {
+            throw new exceptions\InvalidConfigException('pageArticle.maxFetches must be a non-negative integer');
+        }
         if ($this->bodyXPath !== null) {
             $previous = libxml_use_internal_errors(true);
             try {
@@ -32,6 +37,21 @@ class PageArticle extends PageDescription
                 libxml_use_internal_errors($previous);
             }
         }
+    }
+
+    public function processFeed($feed)
+    {
+        $this->fetches = 0;
+        parent::processFeed($feed);
+    }
+
+    protected function canFetchPage($url)
+    {
+        if ($this->fetches >= $this->maxFetches) {
+            return false;
+        }
+        ++$this->fetches;
+        return true;
     }
 
     protected function cachePath($url)
