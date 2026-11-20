@@ -18,7 +18,7 @@ class PageArticle extends PageDescription
     protected $sectionType = 'pageArticle';
     protected $cacheDirectory = 'rss-pipes-page-articles';
     // Separate representations even when both section types share a cacheDir.
-    protected $cachePrefix = 'article-v6-';
+    protected $cachePrefix = 'article-v7-';
 
     public function init()
     {
@@ -306,6 +306,10 @@ class PageArticle extends PageDescription
 
     private function isExcluded(\DOMElement $node)
     {
+        // Bonnier's subscription checkout is interface text, not article text.
+        if (preg_match('/(?:^|\s)(?:tapet-paywall|tapet-single-offer)(?:\s|$)/', $node->getAttribute('class'))) {
+            return true;
+        }
         // DN inserts an account promotion between the introduction and body.
         if ($node->getAttribute('data-component-type') === 'login infobox' ||
             preg_match('/(?:^|\s)login-infobox(?:\s|$)/', $node->getAttribute('class'))) {

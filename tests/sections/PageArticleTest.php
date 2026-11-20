@@ -164,7 +164,7 @@ class PageArticleTest extends \PHPUnit_Framework_TestCase
 
     public function oldArticleCachePrefixesProvider()
     {
-        return [['article-v1-'], ['article-v2-'], ['article-v3-'], ['article-v4-'], ['article-v5-']];
+        return [['article-v1-'], ['article-v2-'], ['article-v3-'], ['article-v4-'], ['article-v5-'], ['article-v6-']];
     }
 
     public function testPublisherOverrideAndMissingOverrideFallback()
@@ -275,6 +275,32 @@ class PageArticleTest extends \PHPUnit_Framework_TestCase
                 $this->assertSame('<p>' . trim($paragraph) . '</p>' .
                     "\n<h3>Article heading</h3>\n<ul><li>Article list item.</li></ul>\n<p>Final paragraph.</p>",
                     $item->description, $method . ': ' . $marker);
+            }
+        }
+    }
+
+    public function testSubscriptionOfferIsExcludedWhilePaywallLabelIsPreserved()
+    {
+        $paragraph = str_repeat('This is the available article introduction, with useful information. ', 6);
+        foreach (['markup', 'override', 'readability', 'structured'] as $method) {
+            foreach (['tapet-paywall', 'tapet-single-offer'] as $class) {
+                $section = new PageArticleStub();
+                if ($method === 'override') {
+                    $section->bodyXPath = '//article';
+                }
+                $body = '<article' . ($method === 'markup' ? ' itemprop="articleBody"' : '') . '><p>' . $paragraph . '</p>' .
+                    '<div class="' . $class . '"><h2>Black Week!</h2><p>Läs DN i 6 mån för bara 9 kr.</p>' .
+                    '<h3>Det här ingår i DN +Allt</h3><ul><li>Alla artiklar</li></ul></div></article>';
+                $data = ['@type' => 'NewsArticle', 'isAccessibleForFree' => false];
+                if ($method === 'structured') {
+                    $data['articleBody'] = $body;
+                    $body = '';
+                }
+                $section->body = '<script type="application/ld+json">' . json_encode($data) . '</script>' . $body;
+                $item = $this->item();
+                $section->processItem($item);
+                $this->assertSame('<p>' . trim($paragraph) . "</p>\n<p>Troligen betalvägg</p>",
+                    $item->description, $method . ': ' . $class);
             }
         }
     }
