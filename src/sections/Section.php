@@ -9,6 +9,26 @@ use rsspipes\sections\exceptions\InvalidConfigException;
 
 abstract class Section
 {
+    public $log = false;
+
+    protected function logEvent($event, $url, $status = null)
+    {
+        if (!$this->log) {
+            return;
+        }
+        $parts = parse_url((string) $url);
+        $record = [
+            'section' => get_class($this),
+            'event' => $event,
+            'host' => $parts['host'] ?? '',
+            'path' => $parts['path'] ?? '',
+        ];
+        if ($status !== null) {
+            $record['upstream_status'] = (int) $status;
+        }
+        error_log('[rss-pipes] ' . json_encode($record, JSON_UNESCAPED_SLASHES));
+    }
+
     public function init()
     {
     }

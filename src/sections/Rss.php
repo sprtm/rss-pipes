@@ -34,6 +34,7 @@ class Rss extends Section
         if ($error === null) {
             return;
         }
+        $this->logEvent('source_unavailable', $this->url);
         if ($this->showErrors) {
             $feed->metadata += ['title' => 'RSS Pipes: source unavailable',
                 'link' => $this->url, 'description' => 'The source feed could not be loaded.'];
@@ -82,6 +83,7 @@ class Rss extends Section
             }
             $cached = @file_get_contents($path);
             if ($cached !== false) {
+                $this->logEvent($error === null ? 'source_cache_hit' : 'serving_last_good_source', $this->url);
                 $this->parseBody($cached, $feed);
                 return null;
             }
@@ -95,6 +97,7 @@ class Rss extends Section
     {
         $http = $this->createHttpClient();
         $body = $http->get($this->url);
+        $this->logEvent('source_request', $this->url, $http->httpCode);
         if ($body === false) {
             $error = $http->lastError ?: 'Feed request failed';
         } elseif ($http->httpCode < 200 || $http->httpCode >= 300) {

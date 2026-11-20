@@ -86,10 +86,12 @@ class PageArticle extends PageDescription
             return true;
         }
         if ($this->fetches >= $this->maxFetches) {
+            $this->logEvent('skip_fetch_limit', $url);
             return false;
         }
         if ($this->newLinks !== null) {
             if (!isset($this->newLinks[$url])) {
+                $this->logEvent('skip_no_new_link_claim', $url);
                 return false;
             }
             unset($this->newLinks[$url]);
@@ -178,6 +180,7 @@ class PageArticle extends PageDescription
             // Missing/short article bodies use the same metadata fallbacks.
         }
 
+        $this->logEvent('article_metadata_fallback', $url);
         $description = parent::extractFromDocument($document);
         return $description === null ? null : $this->textToHtml($description);
     }

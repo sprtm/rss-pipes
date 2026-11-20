@@ -52,6 +52,10 @@ Set `sourceCacheTtl: 600` on an RSS or Atom source to share one upstream check
 per ten minutes across readers. On failure, the pipe serves the last successful
 source until a later check succeeds. The default is zero (check every run).
 
+Set `log: true` on the `rss`, `atom`, `pageArticle`, or `pageDescription` section
+to write request statuses and cache or extraction decisions to the PHP error log.
+Look for `[rss-pipes]` in Docker logs. URLs omit credentials and query strings.
+
 ### Atom
 
 Parses atom feed.

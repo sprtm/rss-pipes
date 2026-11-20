@@ -44,6 +44,7 @@ class PageDescription extends Section
         parse_str(is_string($query) ? $query : '', $parameters);
         if (array_key_exists('pinnedEntry', $parameters) || array_key_exists('post', $parameters) ||
             array_key_exists('ifr-dir-postId', $parameters)) {
+            $this->logEvent('skip_live_update', $item->link);
             // These links point into a chat/live blog. Its HTML and cached page
             // text can contain many other updates; retain the feed's excerpt.
             return;
@@ -53,12 +54,14 @@ class PageDescription extends Section
         if ($cached !== null) {
             $description = $cached['description'];
             $this->paywalled = $cached['paywalled'];
+            $this->logEvent($description === null ? 'cached_failure_keep_summary' : 'using_cached_description', $item->link);
         } else {
             if (!$this->canFetchPage($item->link)) {
                 return;
             }
             $body = $this->fetchPage($item->link);
             $description = is_string($body) && trim($body) !== '' ? $this->findDescription($body, $item->link) : null;
+            $this->logEvent($description === null ? 'keep_feed_summary' : 'using_page_content', $item->link);
             $this->writeCache($item->link, $description);
         }
 
@@ -87,6 +90,7 @@ class PageDescription extends Section
     {
         $http = new \HttpClient();
         $body = $http->get($url, ['timeout' => $this->timeout]);
+        $this->logEvent('page_request', $url, $http->httpCode);
         return $http->httpCode >= 200 && $http->httpCode < 300 ? $body : false;
     }
 
