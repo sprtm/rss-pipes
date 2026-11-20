@@ -56,6 +56,11 @@ Set `log: true` on the `rss`, `atom`, `pageArticle`, or `pageDescription` sectio
 to write request statuses and cache or extraction decisions to the PHP error log.
 Look for `[rss-pipes]` in Docker logs. URLs omit credentials and query strings.
 
+HTTP 403, 406, 429, or 503 pauses upstream requests to the same hostname for
+31 minutes. Refreshes during the pause serve cached content or RSS summaries
+and do not restart the timer. Source failures require a previously cached
+feed to serve headlines. Cooldown state uses the source cache volume.
+
 ### Atom
 
 Parses atom feed.

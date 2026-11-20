@@ -74,9 +74,12 @@ class Rss extends Section
                         return null;
                     }
                 }
-                rewind($lock);
-                ftruncate($lock, 0);
-                fwrite($lock, json_encode(['checked' => time(), 'error' => $error]));
+                // A skipped check must not postpone the next eligible request.
+                if ($error !== 'Source request paused') {
+                    rewind($lock);
+                    ftruncate($lock, 0);
+                    fwrite($lock, json_encode(['checked' => time(), 'error' => $error]));
+                }
                 if ($error === null) {
                     return null;
                 }
@@ -95,13 +98,24 @@ class Rss extends Section
 
     private function loadSource($feed, &$body)
     {
-        $http = $this->createHttpClient();
-        $body = $http->get($this->url);
-        $this->logEvent('source_request', $this->url, $http->httpCode);
+        $transportError = null;
+        $response = $this->guardedRequest($this->url, function () use (&$transportError) {
+            $http = $this->createHttpClient();
+            $body = $http->get($this->url);
+            $this->logEvent('source_request', $this->url, $http->httpCode);
+            if ($body === false) {
+                $transportError = $http->lastError;
+            }
+            return [$body, $http->httpCode];
+        });
+        if ($response === null) {
+            return 'Source request paused';
+        }
+        list($body, $status) = $response;
         if ($body === false) {
-            $error = $http->lastError ?: 'Feed request failed';
-        } elseif ($http->httpCode < 200 || $http->httpCode >= 300) {
-            $error = 'Feed request failed: HTTP ' . $http->httpCode;
+            $error = $transportError ?: 'Feed request failed';
+        } elseif ($status < 200 || $status >= 300) {
+            $error = 'Feed request failed: HTTP ' . $status;
         } elseif (!is_string($body) || trim($body) === '') {
             $error = 'The source feed returned an empty response';
         } else {

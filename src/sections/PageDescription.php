@@ -60,6 +60,9 @@ class PageDescription extends Section
                 return;
             }
             $body = $this->fetchPage($item->link);
+            if ($body === null) {
+                return;
+            }
             $description = is_string($body) && trim($body) !== '' ? $this->findDescription($body, $item->link) : null;
             $this->logEvent($description === null ? 'keep_feed_summary' : 'using_page_content', $item->link);
             $this->writeCache($item->link, $description);
@@ -88,10 +91,16 @@ class PageDescription extends Section
 
     protected function fetchPage($url)
     {
-        $http = new \HttpClient();
-        $body = $http->get($url, ['timeout' => $this->timeout]);
-        $this->logEvent('page_request', $url, $http->httpCode);
-        return $http->httpCode >= 200 && $http->httpCode < 300 ? $body : false;
+        $response = $this->guardedRequest($url, function () use ($url) {
+            $http = new \HttpClient();
+            $body = $http->get($url, ['timeout' => $this->timeout]);
+            $this->logEvent('page_request', $url, $http->httpCode);
+            return [$body, $http->httpCode];
+        });
+        if ($response === null) {
+            return null;
+        }
+        return $response[1] >= 200 && $response[1] < 300 ? $response[0] : false;
     }
 
     protected function currentTime()

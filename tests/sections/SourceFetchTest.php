@@ -13,7 +13,7 @@ class SourceFetchTest extends \PHPUnit_Framework_TestCase
     public function testSourceFailuresProduceRssErrorsInsteadOfFatalHtml($status, $body, $message)
     {
         foreach ([new RssFetchStub(), new AtomFetchStub()] as $section) {
-            $section->url = 'https://example.com/rss/';
+            $section->url = 'https://' . uniqid('source-') . '.example/rss/';
             $section->status = $status;
             $section->body = $body;
             $feed = new Feed();
@@ -76,7 +76,7 @@ class SourceFetchTest extends \PHPUnit_Framework_TestCase
     public function testReaderReloadAndRejectedRefreshKeepLastGoodSource()
     {
         $section = new RssFetchStub();
-        $section->url = 'https://example.com/' . uniqid();
+        $section->url = 'https://' . uniqid('source-') . '.example/';
         $section->sourceCacheTtl = 600;
         $section->body = '<rss><channel><title>Headlines</title></channel></rss>';
         $path = sys_get_temp_dir() . '/rss-pipes-sources/' .
@@ -96,6 +96,33 @@ class SourceFetchTest extends \PHPUnit_Framework_TestCase
         } finally {
             @unlink($path);
             @unlink($path . '.lock');
+        }
+    }
+
+    public function testSeparateSourceOnSameHostWaitsWithoutExtendingCooldown()
+    {
+        $host = uniqid('publisher-') . '.example';
+        $path = sys_get_temp_dir() . '/rss-pipes-sources/host-' . hash('sha256', $host);
+        $first = new RssFetchStub();
+        $first->url = 'https://' . $host . '/one';
+        $first->status = 406;
+        $second = new RssFetchStub();
+        $second->url = 'https://' . $host . '/two';
+        $second->body = '<rss><channel><title>Back online</title></channel></rss>';
+        try {
+            $before = time();
+            $first->processFeed(new Feed());
+            $deadline = (int) file_get_contents($path);
+            $this->assertGreaterThanOrEqual($before + 1860, $deadline);
+            $second->processFeed(new Feed());
+            $this->assertSame(0, $second->requests);
+            $this->assertSame($deadline, (int) file_get_contents($path));
+            file_put_contents($path, (string) (time() - 1));
+            $feed = new Feed();
+            $second->processFeed($feed);
+            $this->assertSame('Back online', $feed->metadata['title']);
+        } finally {
+            @unlink($path);
         }
     }
 
