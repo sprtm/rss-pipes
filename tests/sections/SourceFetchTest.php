@@ -73,6 +73,32 @@ class SourceFetchTest extends \PHPUnit_Framework_TestCase
         }
     }
 
+    public function testReaderReloadAndRejectedRefreshKeepLastGoodSource()
+    {
+        $section = new RssFetchStub();
+        $section->url = 'https://example.com/' . uniqid();
+        $section->sourceCacheTtl = 600;
+        $section->body = '<rss><channel><title>Headlines</title></channel></rss>';
+        $path = sys_get_temp_dir() . '/rss-pipes-sources/' .
+            hash('sha256', get_class($section) . "\0" . $section->url);
+        try {
+            $section->processFeed(new Feed());
+            $section->status = 406;
+            foreach ([1, 2, 2] as $index => $expectedRequests) {
+                if ($index === 1) {
+                    file_put_contents($path . '.lock', '');
+                }
+                $feed = new Feed();
+                $section->processFeed($feed);
+                $this->assertSame('Headlines', $feed->metadata['title']);
+                $this->assertSame($expectedRequests, $section->requests);
+            }
+        } finally {
+            @unlink($path);
+            @unlink($path . '.lock');
+        }
+    }
+
     public function testExistingFeedMetadataSurvivesSourceFailure()
     {
         $section = new RssFetchStub();
@@ -90,9 +116,11 @@ trait SourceFetchStubBehavior
 {
     public $body;
     public $status = 200;
+    public $requests = 0;
 
     protected function createHttpClient()
     {
+        ++$this->requests;
         return new class($this->body, $this->status) {
             public $httpCode;
             public $lastError = 'Transport error';

@@ -48,6 +48,10 @@ and unexpected document types produce an error item instead of a PHP fatal
 error page. A failed source supplies fallback channel metadata when none exists,
 so the error can be read as RSS. Set `showErrors: 0` to suppress error items.
 
+Set `sourceCacheTtl: 600` on an RSS or Atom source to share one upstream check
+per ten minutes across readers. On failure, the pipe serves the last successful
+source until a later check succeeds. The default is zero (check every run).
+
 ### Atom
 
 Parses atom feed.

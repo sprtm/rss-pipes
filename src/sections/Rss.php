@@ -12,11 +12,86 @@ class Rss extends Section
 {
     public $url;
     public $showErrors = 1;
+    public $sourceCacheTtl = 0;
+
+    public function init()
+    {
+        if (!is_int($this->sourceCacheTtl) || $this->sourceCacheTtl < 0) {
+            throw new exceptions\InvalidConfigException('sourceCacheTtl must be a non-negative integer');
+        }
+    }
     
     /**
      * @param Feed $feed
      */
     public function processFeed($feed)
+    {
+        if ($this->sourceCacheTtl > 0) {
+            $error = $this->loadCachedSource($feed);
+        } else {
+            $error = $this->loadSource($feed, $body);
+        }
+        if ($error === null) {
+            return;
+        }
+        if ($this->showErrors) {
+            $feed->metadata += ['title' => 'RSS Pipes: source unavailable',
+                'link' => $this->url, 'description' => 'The source feed could not be loaded.'];
+            $item = new Item(['title' => $error, 'link' => $this->url]);
+            $item->sourceError = true;
+            $feed->addItem($item);
+        }
+    }
+
+    private function loadCachedSource($feed)
+    {
+        $directory = sys_get_temp_dir() . '/rss-pipes-sources';
+        if (!is_dir($directory) && !@mkdir($directory, 0700, true) && !is_dir($directory)) {
+            return 'Cannot create source cache directory';
+        }
+        $path = $directory . '/' . hash('sha256', get_class($this) . "\0" . $this->url);
+        $lock = @fopen($path . '.lock', 'c+');
+        if (!$lock) {
+            return 'Cannot open source cache lock';
+        }
+        try {
+            if (!flock($lock, LOCK_EX)) {
+                return 'Cannot lock source cache';
+            }
+            $state = json_decode(stream_get_contents($lock), true);
+            if (isset($state['checked']) && time() - $state['checked'] < $this->sourceCacheTtl) {
+                $error = $state['error'];
+            } else {
+                $error = $this->loadSource($feed, $body);
+                if ($error === null) {
+                    $temporary = tempnam($directory, 'feed-');
+                    if ($temporary === false || file_put_contents($temporary, $body) !== strlen($body) ||
+                        !rename($temporary, $path)) {
+                        if ($temporary !== false) {
+                            @unlink($temporary);
+                        }
+                        return null;
+                    }
+                }
+                rewind($lock);
+                ftruncate($lock, 0);
+                fwrite($lock, json_encode(['checked' => time(), 'error' => $error]));
+                if ($error === null) {
+                    return null;
+                }
+            }
+            $cached = @file_get_contents($path);
+            if ($cached !== false) {
+                $this->parseBody($cached, $feed);
+                return null;
+            }
+            return $error ?? 'Cached source unavailable';
+        } finally {
+            fclose($lock);
+        }
+    }
+
+    private function loadSource($feed, &$body)
     {
         $http = $this->createHttpClient();
         $body = $http->get($this->url);
@@ -30,7 +105,7 @@ class Rss extends Section
             $previous = libxml_use_internal_errors(true);
             try {
                 $this->parseBody($body, $feed);
-                return;
+                return null;
             } catch (\Exception $exception) {
                 $error = 'Invalid source feed: ' . $exception->getMessage();
             } finally {
@@ -38,13 +113,7 @@ class Rss extends Section
                 libxml_use_internal_errors($previous);
             }
         }
-        if ($this->showErrors) {
-            $feed->metadata += ['title' => 'RSS Pipes: source unavailable',
-                'link' => $this->url, 'description' => 'The source feed could not be loaded.'];
-            $item = new Item(['title' => $error, 'link' => $this->url]);
-            $item->sourceError = true;
-            $feed->addItem($item);
-        }
+        return $error;
     }
 
     protected function createHttpClient()
