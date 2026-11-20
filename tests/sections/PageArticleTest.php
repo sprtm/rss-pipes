@@ -158,7 +158,7 @@ class PageArticleTest extends \PHPUnit_Framework_TestCase
 
     public function oldArticleCachePrefixesProvider()
     {
-        return [['article-v1-'], ['article-v2-'], ['article-v3-']];
+        return [['article-v1-'], ['article-v2-'], ['article-v3-'], ['article-v4-']];
     }
 
     public function testPublisherOverrideAndMissingOverrideFallback()
@@ -224,6 +224,28 @@ class PageArticleTest extends \PHPUnit_Framework_TestCase
             $item = $this->item();
             $section->processItem($item);
             $this->assertSame('<p>' . trim($paragraph) . '</p>' . "\n<h2>Article summary</h2>\n<p>Final article paragraph.</p>",
+                $item->description, $method);
+        }
+    }
+
+    public function testAffiliateCarouselCannotReplaceArticleOrMetadataFallback()
+    {
+        $ad = '<div data-track-id="affiliate-ad-carousel" data-track-element-type="AffiliateAdCarousel">' .
+            '<p>Annons</p><p>Hitta ett mobilabonnemang som passar dig!</p>' .
+            str_repeat('<a href="https://example.com/offer"><p>Mobile subscription offer.</p></a>', 30) . '</div>';
+        $paragraph = str_repeat('This is the news article, with useful information. ', 12);
+        foreach (['markup', 'override', 'readability', 'fallback'] as $method) {
+            $section = new PageArticleStub();
+            if ($method === 'override') {
+                // An override matching only the ad must fall through to the body.
+                $section->bodyXPath = '//*[@data-track-id="affiliate-ad-carousel"]';
+            }
+            $section->body = '<html><head><meta name="description" content="News summary"></head><body><article' .
+                (in_array($method, ['markup', 'override'], true) ? ' itemprop="articleBody"' : '') . '>' .
+                $ad . ($method === 'fallback' ? '' : '<p>' . $paragraph . '</p>') . '</article></body></html>';
+            $item = $this->item();
+            $section->processItem($item);
+            $this->assertSame($method === 'fallback' ? '<p>News summary</p>' : '<p>' . trim($paragraph) . '</p>',
                 $item->description, $method);
         }
     }

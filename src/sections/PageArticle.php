@@ -15,7 +15,7 @@ class PageArticle extends PageDescription
     protected $sectionType = 'pageArticle';
     protected $cacheDirectory = 'rss-pipes-page-articles';
     // Separate representations even when both section types share a cacheDir.
-    protected $cachePrefix = 'article-v4-';
+    protected $cachePrefix = 'article-v5-';
 
     public function init()
     {
@@ -241,6 +241,11 @@ class PageArticle extends PageDescription
     {
         // Aftonbladet's generated "Snabbversionen" box repeats the article.
         if ($node->getAttribute('data-track-id') === 'article-summary') {
+            return true;
+        }
+        // Affiliate carousels can outweigh a short news story in Readability.
+        if (in_array($node->getAttribute('data-track-element-type'), ['AdSlot', 'AffiliateAd', 'AffiliateAdCarousel'], true) ||
+            $node->getAttribute('data-track-id') === 'affiliate-ad-carousel') {
             return true;
         }
         if (in_array(strtolower($node->tagName), ['script', 'style', 'noscript', 'template', 'nav', 'aside', 'footer', 'form', 'button', 'dialog', 'iframe', 'svg', 'video', 'audio', 'figure', 'figcaption', 'time', 'head', 'object', 'embed', 'math', 'canvas', 'input', 'select', 'textarea'], true) ||
