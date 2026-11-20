@@ -49,7 +49,7 @@ class PaywallTest extends \PHPUnit_Framework_TestCase
             $section->processItem($item);
             $expected = $section instanceof PageArticle ? '<p>Article text.</p>' : 'Summary';
             if ($expectedPaid) {
-                $expected .= "\n<p>Betalartikel</p>";
+                $expected .= "\n<p>Troligen betalvägg</p>";
             }
             $this->assertSame($expected, $item->description);
             $this->assertNull($item->comments);
@@ -99,9 +99,9 @@ class PaywallTest extends \PHPUnit_Framework_TestCase
             $item = $this->item();
             $next->processItem($item);
             $expected = $next instanceof PageArticle ? '<p>Article text.</p>' : 'Summary';
-            $this->assertSame($expected . "\n<p>Betalartikel</p>", $item->description);
+            $this->assertSame($expected . "\n<p>Troligen betalvägg</p>", $item->description);
             $next->processItem($item);
-            $this->assertSame($expected . "\n<p>Betalartikel</p>", $item->description);
+            $this->assertSame($expected . "\n<p>Troligen betalvägg</p>", $item->description);
             $this->assertSame([], $next->urls);
 
             $next->now += 86400;
@@ -121,7 +121,7 @@ class PaywallTest extends \PHPUnit_Framework_TestCase
             $item = $this->item();
             $section->processItem($item);
             $expected = $section instanceof PageArticle ? '<p>Article text.</p>' : 'Summary';
-            $this->assertSame($expected . ($labelled ? "\n<p>Betalartikel</p>" : ''), $item->description);
+            $this->assertSame($expected . ($labelled ? "\n<p>Troligen betalvägg</p>" : ''), $item->description);
         }
     }
 
@@ -216,10 +216,10 @@ class PaywallTest extends \PHPUnit_Framework_TestCase
             $section->body = '<script type="application/ld+json">{"@type":"NewsArticle","isAccessibleForFree":false}</script>';
             $item = $this->item('<p>First feed excerpt.</p>');
             $section->processItem($item);
-            $this->assertSame("<p>First feed excerpt.</p>\n<p>Betalartikel</p>", $item->description);
+            $this->assertSame("<p>First feed excerpt.</p>\n<p>Troligen betalvägg</p>", $item->description);
             $item = $this->item('<p>Another feed excerpt.</p>');
             $section->processItem($item);
-            $this->assertSame("<p>Another feed excerpt.</p>\n<p>Betalartikel</p>", $item->description);
+            $this->assertSame("<p>Another feed excerpt.</p>\n<p>Troligen betalvägg</p>", $item->description);
             $this->assertCount(1, $section->urls);
 
             $section->body = false;
@@ -246,7 +246,7 @@ class PaywallTest extends \PHPUnit_Framework_TestCase
             $this->assertCount(1, $section->urls);
             $cached = json_decode(file_get_contents($path), true);
             $this->assertTrue($cached['paywalled']);
-            $this->assertSame(false, strpos($cached['description'], 'Betalartikel'));
+            $this->assertSame(false, strpos($cached['description'], 'Troligen betalvägg'));
         }
     }
 }

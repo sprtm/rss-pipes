@@ -64,8 +64,8 @@ class PageDescription extends Section
         }
         if ($this->paywalled === true) {
             $description = rtrim((string) $item->description);
-            if (!preg_match('~<p>Betalartikel</p>\s*$~u', $description)) {
-                $item->description = $description . ($description === '' ? '' : "\n") . '<p>Betalartikel</p>';
+            if (!preg_match('~<p>Troligen betalvägg</p>\s*$~u', $description)) {
+                $item->description = $description . ($description === '' ? '' : "\n") . '<p>Troligen betalvägg</p>';
             }
         }
     }

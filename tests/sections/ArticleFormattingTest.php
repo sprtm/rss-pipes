@@ -147,7 +147,7 @@ class ArticleFormattingTest extends \PHPUnit_Framework_TestCase
             $feed = new Feed();
             $feed->items[] = $this->item();
             $section->processFeed($feed);
-            $expected = "<h2>ÅÄÖ &amp; news</h2>\n<p><strong>Ingress.</strong></p>\n<p>Betalartikel</p>";
+            $expected = "<h2>ÅÄÖ &amp; news</h2>\n<p><strong>Ingress.</strong></p>\n<p>Troligen betalvägg</p>";
             $this->assertSame($expected, $feed->items[0]->description);
             $xml = new \SimpleXMLElement((new RssBuilder())->buildFeed($feed));
             $this->assertSame($expected, (string) $xml->channel->item->description);

@@ -129,7 +129,7 @@ Uses the PHP 7-compatible `andreskrey/readability.php` library. Run
 `composer install` after updating; its dependencies require PHP's DOM, XML, and
 mbstring extensions.
 
-Both `pageArticle` and `pageDescription` append `Betalartikel` as a separate final
+Both `pageArticle` and `pageDescription` append `Troligen betalvägg` as a separate final
 HTML paragraph when the downloaded page's JSON-LD explicitly marks the article
 or one of its `hasPart` sections as not accessible for free. Boolean `false` and
 string values such as `"False"` are recognized. Missing metadata, short excerpts,
