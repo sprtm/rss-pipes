@@ -41,7 +41,7 @@ class PageDescription extends Section
             $description = $cached['description'];
         } else {
             $body = $this->fetchPage($item->link);
-            $description = is_string($body) && trim($body) !== '' ? $this->findDescription($body) : null;
+            $description = is_string($body) && trim($body) !== '' ? $this->findDescription($body, $item->link) : null;
             $this->writeCache($item->link, $description);
         }
 
@@ -112,7 +112,7 @@ class PageDescription extends Section
         @unlink($temporary);
     }
 
-    protected function findDescription($body)
+    protected function findDescription($body, $url = null)
     {
         // Older libxml versions can miss HTML5 or late charset declarations.
         // Tell the parser explicitly when the bytes are UTF-8, even if a meta
@@ -128,14 +128,14 @@ class PageDescription extends Section
                 return null;
             }
 
-            return $this->extractFromDocument($document);
+            return $this->extractFromDocument($document, $url);
         } finally {
             libxml_clear_errors();
             libxml_use_internal_errors($previous);
         }
     }
 
-    protected function extractFromDocument(\DOMDocument $document)
+    protected function extractFromDocument(\DOMDocument $document, $url = null)
     {
         $descriptions = [];
         $keys = ['og:description', 'twitter:description', 'description'];

@@ -50,6 +50,7 @@ class PageArticleTest extends \PHPUnit_Framework_TestCase
             ['<div itemprop="text articleBody"><p>First</p><div itemprop="articleBody"><p>Second</p></div></div>', "First\n\nSecond"],
             ['<section itemprop="articleBody"><p>First</p></section><section itemprop="articleBody"><p>Second</p></section>', "First\n\nSecond"],
             ['<section itemprop="articleBody"><table><tr><th>Name</th><th>Score</th></tr><tr><td>Club</td><td>3</td></tr></table></section>', "Name Score\n\nClub 3"],
+            ['<section itemprop="articleBody"><time>Published yesterday</time><p>Actual story.</p><figure><figcaption>Video promotion and photo credit.</figcaption></figure><p>Final paragraph.</p></section>', "Actual story.\n\nFinal paragraph."],
             ['<section itemprop="articleBody"><p>Line<br>break</p><p><i>More</i> text.</p><script>alert(1)</script><nav>Menu</nav><aside>Related</aside><form>Subscribe</form><footer>Footer</footer><p hidden>Hidden</p><p aria-hidden="true">Hidden</p></section>', "Line\nbreak\n\nMore text."],
             ['<script type="application/ld+json">{"@graph":[{"@type":"NewsArticle","articleBody":"First paragraph.\n\nSecond &amp; final paragraph."}]}</script>', "First paragraph.\n\nSecond & final paragraph."],
             ['<script type="application/ld+json">[{"@type":["Thing","https://schema.org/BlogPosting"],"articleBody":"<p>Café</p><p>日本語</p>"}]</script>', "Café\n\n日本語"],
@@ -75,6 +76,58 @@ class PageArticleTest extends \PHPUnit_Framework_TestCase
         $item = $this->item();
         $section->processItem($item);
         $this->assertSame(trim($paragraph) . "\n\nFinal paragraph.", $item->description);
+    }
+
+    /** @dataProvider linkedPostsProvider */
+    public function testLiveBlogExtractsOnlyTheRequestedPost($attribute)
+    {
+        $section = new PageArticleStub();
+        $section->body = '<meta name="description" content="Whole blog summary"><main itemprop="articleBody">' .
+            '<section data-post-id="other"><p>Unrelated story.</p></section>' .
+            '<section ' . $attribute . '><time>08:00</time><p>Requested update.</p><p>Second paragraph.</p></section>' .
+            '<section><p>Another unrelated story.</p></section></main>';
+        $item = $this->item('Original excerpt', 'https://example.com/live?post=selected');
+        $section->processItem($item);
+        $this->assertSame("Requested update.\n\nSecond paragraph.", $item->description);
+        $this->assertCount(1, $section->urls);
+    }
+
+    public function linkedPostsProvider()
+    {
+        return [['id="selected"'], ['id="post-selected"'], ['id="entry-selected"'],
+            ['data-id="selected"'], ['data-post-id="selected"'], ['data-entry-id="selected"']];
+    }
+
+    public function testUnidentifiedLivePostKeepsEachFeedExcerptIncludingCachedFailures()
+    {
+        $section = new PageArticleStub();
+        $section->cache = true;
+        $section->cacheDir = $this->cacheDir;
+        $section->body = '<meta name="description" content="Wrong blog summary">' .
+            '<script type="application/ld+json">{"@type":"NewsArticle","articleBody":"Entire live blog"}</script>' .
+            '<main itemprop="articleBody"><p>' . str_repeat('Unrelated updates. ', 40) . '</p></main>';
+        $item = $this->item('Correct feed excerpt', 'https://example.com/live?post=missing');
+        $section->processItem($item);
+        $this->assertSame('Correct feed excerpt', $item->description);
+        $item = $this->item('Another excerpt', 'https://example.com/live?post=missing');
+        $section->processItem($item);
+        $this->assertSame('Another excerpt', $item->description);
+        $this->assertCount(1, $section->urls);
+    }
+
+    public function testPreviousArticleCacheVersionIsIgnored()
+    {
+        $url = 'https://example.com/article';
+        file_put_contents($this->cacheDir . '/article-v1-' . hash('sha256', $url) . '.json',
+            json_encode(['expiresAt' => 100000, 'description' => 'Old noisy extraction']));
+        $section = new PageArticleStub();
+        $section->cache = true;
+        $section->cacheDir = $this->cacheDir;
+        $section->body = '<section itemprop="articleBody"><p>Clean article.</p></section>';
+        $item = $this->item();
+        $section->processItem($item);
+        $this->assertSame('Clean article.', $item->description);
+        $this->assertCount(1, $section->urls);
     }
 
     public function testPublisherOverrideAndMissingOverrideFallback()

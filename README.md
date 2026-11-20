@@ -64,10 +64,19 @@ forms, and other non-article elements are discarded. Readability results shorter
 than 200 characters are ignored to reduce accidental extraction of page controls.
 When available, an `article` or `main` element limits the heuristic extraction;
 site footers, print headers, and common interface notices are removed first.
+Figures, captions, and `time` elements are excluded from article text.
 If no usable article is found, it falls back to `og:description`,
 `twitter:description`, and meta `description`, then keeps the item's own feed
 description. Do not add `pageDescription` after `pageArticle`, as that would
 replace the article text with a summary.
+
+For live-blog links containing `?post=...`, extraction is restricted to a matching
+HTML `id` (the post ID, `post-ID`, or `entry-ID`), `data-id`, `data-post-id`, or
+`data-entry-id`. If no matching post can be identified, the item's own feed
+description is preserved. The whole blog and its page metadata are not used as
+substitutes for a single update. Other live-blog URL formats are not yet handled
+specially. JSON output shows paragraph breaks as escaped `\n\n`; a JSON viewer
+or consuming application must render those breaks for readable presentation.
 
 No publisher settings are required by default. For a site whose article is not
 identified correctly, an optional XPath expression can select its body before
