@@ -143,7 +143,7 @@ class PaywallTest extends \PHPUnit_Framework_TestCase
         foreach ($this->sections() as $section) {
             $section->cache = true;
             $section->cacheDir = $this->cacheDir;
-            $prefix = $section instanceof PageArticle ? 'article-v2-' : '';
+            $prefix = $section instanceof PageArticle ? 'article-v3-' : '';
             $path = $this->cacheDir . '/' . $prefix . hash('sha256', $url) . '.json';
             $cached = json_encode(['expiresAt' => 100000, 'description' => 'Entire unrelated live blog',
                 'paywalled' => true, 'paywallVersion' => 2]);
@@ -188,7 +188,7 @@ class PaywallTest extends \PHPUnit_Framework_TestCase
         foreach ($this->sections() as $section) {
             $section->cache = true;
             $section->cacheDir = $this->cacheDir;
-            $prefix = $section instanceof PageArticle ? 'article-v2-' : '';
+            $prefix = $section instanceof PageArticle ? 'article-v3-' : '';
             $path = $this->cacheDir . '/' . $prefix . hash('sha256', 'https://example.com/article') . '.json';
             file_put_contents($path, json_encode(['expiresAt' => 100000, 'description' => 'Old text',
                 'paywalled' => true, 'paywallVersion' => 1]));
@@ -238,7 +238,7 @@ class PaywallTest extends \PHPUnit_Framework_TestCase
         foreach ($this->sections() as $section) {
             $section->cache = true;
             $section->cacheDir = $this->cacheDir;
-            $prefix = $section instanceof PageArticle ? 'article-v2-' : '';
+            $prefix = $section instanceof PageArticle ? 'article-v3-' : '';
             $path = $this->cacheDir . '/' . $prefix . hash('sha256', 'https://example.com/article') . '.json';
             file_put_contents($path, json_encode(['expiresAt' => 100000, 'description' => 'Old text']));
             $section->body = $this->html(['@type' => 'NewsArticle', 'isAccessibleForFree' => 'False']);

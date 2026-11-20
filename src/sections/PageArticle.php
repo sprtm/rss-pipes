@@ -5,6 +5,7 @@ namespace rsspipes\sections;
 use andreskrey\Readability\Configuration;
 use andreskrey\Readability\ParseException;
 use andreskrey\Readability\Readability;
+use rsspipes\html\ArticleHtml;
 
 /** Extracts article text from the same HTML request used for page metadata. */
 class PageArticle extends PageDescription
@@ -14,7 +15,7 @@ class PageArticle extends PageDescription
     protected $sectionType = 'pageArticle';
     protected $cacheDirectory = 'rss-pipes-page-articles';
     // Separate representations even when both section types share a cacheDir.
-    protected $cachePrefix = 'article-v2-';
+    protected $cachePrefix = 'article-v3-';
 
     public function init()
     {
@@ -39,10 +40,8 @@ class PageArticle extends PageDescription
         return parent::cachePath($this->bodyXPath === null ? $url : $url . "\0bodyXPath\0" . $this->bodyXPath);
     }
 
-    protected function formatDescription($description)
+    private function textToHtml($description)
     {
-        // Cache extracted text; format on delivery so existing cache entries
-        // gain paragraphs too, without refetching or wrapping HTML twice.
         $paragraphs = explode("\n\n", $this->normalizeText($description));
         foreach ($paragraphs as &$paragraph) {
             $paragraph = '<p>' . str_replace("\n", '<br>',
@@ -80,20 +79,19 @@ class PageArticle extends PageDescription
                     }
                 }
                 if (!$nested) {
-                    $text = $this->articleText($node);
-                    if ($text !== '') {
-                        $parts[] = $text;
+                    if ($this->articleText($node) !== '') {
+                        $parts[] = $this->articleHtml($node, $url);
                     }
                 }
             }
             if ($parts) {
-                return implode("\n\n", $parts);
+                return implode("\n", $parts);
             }
         }
 
         foreach ($document->getElementsByTagName('script') as $script) {
             if (strtolower(trim($script->getAttribute('type'))) === 'application/ld+json') {
-                $body = $this->structuredArticleBody(json_decode($script->textContent, true));
+                $body = $this->structuredArticleBody(json_decode($script->textContent, true), $url);
                 if ($body !== null) {
                     return $body;
                 }
@@ -101,7 +99,7 @@ class PageArticle extends PageDescription
         }
 
         // Give Readability already-decoded UTF-8 HTML. It performs no fetching
-        // and its DOM output is converted to text instead of exposing raw HTML.
+        // and its DOM output is rebuilt using a small set of safe HTML tags.
         $reader = new Readability(new Configuration(['FixRelativeURLs' => false, 'CharThreshold' => 200]));
         try {
             $reader->parse($this->readabilityHtml($document));
@@ -109,14 +107,15 @@ class PageArticle extends PageDescription
             if ($article !== null) {
                 $text = $this->articleText($article);
                 if (mb_strlen($text, 'UTF-8') >= 200) {
-                    return $text;
+                    return $this->articleHtml($article, $url);
                 }
             }
         } catch (ParseException $exception) {
             // Missing/short article bodies use the same metadata fallbacks.
         }
 
-        return parent::extractFromDocument($document);
+        $description = parent::extractFromDocument($document);
+        return $description === null ? null : $this->textToHtml($description);
     }
 
     private function readabilityHtml(\DOMDocument $document)
@@ -126,7 +125,7 @@ class PageArticle extends PageDescription
         $copy->appendChild($copy->importNode($document->documentElement, true));
         $xpath = new \DOMXPath($copy);
         foreach ($xpath->query('//*') as $node) {
-            if ($this->isExcluded($node) && $node->parentNode !== null) {
+            if (strtolower($node->tagName) !== 'head' && $this->isExcluded($node) && $node->parentNode !== null) {
                 $node->parentNode->removeChild($node);
             }
         }
@@ -155,7 +154,7 @@ class PageArticle extends PageDescription
         return $copy->saveHTML($copy->documentElement);
     }
 
-    private function structuredArticleBody($data)
+    private function structuredArticleBody($data, $url)
     {
         if (!is_array($data)) {
             return null;
@@ -168,7 +167,7 @@ class PageArticle extends PageDescription
                     if (!preg_match('/<[a-z][^>]*>/i', $body)) {
                         $text = $this->normalizeText(html_entity_decode($body, ENT_QUOTES | ENT_HTML5, 'UTF-8'));
                         if ($text !== '') {
-                            return $text;
+                            return $this->textToHtml($text);
                         }
                         continue;
                     }
@@ -177,18 +176,26 @@ class PageArticle extends PageDescription
                     $document->loadHTML('<?xml encoding="UTF-8"><html><body>' . $body . '</body></html>', LIBXML_NONET);
                     $text = $this->articleText($document);
                     if ($text !== '') {
-                        return $text;
+                        return $this->articleHtml($document->getElementsByTagName('body')->item(0), $url);
                     }
                 }
             }
         }
         foreach ($data as $value) {
-            $body = $this->structuredArticleBody($value);
+            $body = $this->structuredArticleBody($value, $url);
             if ($body !== null) {
                 return $body;
             }
         }
         return null;
+    }
+
+    private function articleHtml(\DOMNode $node, $url)
+    {
+        $html = new ArticleHtml($url, function (\DOMElement $element) {
+            return $this->isExcluded($element);
+        });
+        return $html->render($node);
     }
 
     private function articleText(\DOMNode $node)
@@ -232,7 +239,7 @@ class PageArticle extends PageDescription
 
     private function isExcluded(\DOMElement $node)
     {
-        if (in_array(strtolower($node->tagName), ['script', 'style', 'noscript', 'template', 'nav', 'aside', 'footer', 'form', 'button', 'dialog', 'iframe', 'svg', 'video', 'audio', 'figure', 'figcaption', 'time'], true) ||
+        if (in_array(strtolower($node->tagName), ['script', 'style', 'noscript', 'template', 'nav', 'aside', 'footer', 'form', 'button', 'dialog', 'iframe', 'svg', 'video', 'audio', 'figure', 'figcaption', 'time', 'head', 'object', 'embed', 'math', 'canvas', 'input', 'select', 'textarea'], true) ||
             $node->hasAttribute('hidden') || strtolower($node->getAttribute('aria-hidden')) === 'true' ||
             in_array($node->getAttribute('role'), ['navigation', 'contentinfo', 'dialog'], true)) {
             return true;

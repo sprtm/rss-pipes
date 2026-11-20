@@ -67,11 +67,15 @@ Works after `rss`, `atom`, or `pipe` sections:
 
 Extraction uses explicit `itemprop="articleBody"` markup first, then JSON-LD
 `articleBody` on articles and blog posts, then Readability's general article
-extractor. Extracted text is delivered as safe HTML using `<p>` paragraphs and
-`<br>` line breaks, so RSS readers retain the spacing. Text is escaped before
-these tags are added; the publisher's original HTML is not passed through.
-Scripts, navigation,
-forms, and other non-article elements are discarded. Readability results shorter
+extractor. Extracted content is rebuilt as safe HTML, preserving semantic headings,
+bold/emphasized text, paragraphs, line breaks, lists, blockquotes, tables, and code
+blocks where present in the selected content. `<b>` and `<i>` become `<strong>`
+and `<em>`. Links retain only validated HTTP, HTTPS, or mailto destinations;
+relative links are resolved against the article URL. Publisher CSS, classes,
+fonts, event handlers, and other source attributes are discarded. Formatting
+provided only by a publisher's CSS is not reconstructed. Plain-text structured
+article bodies and metadata summaries receive paragraphs and line breaks.
+Scripts, navigation, forms, and other non-article elements are discarded. Readability results shorter
 than 200 characters are ignored to reduce accidental extraction of page controls.
 When available, an `article` or `main` element limits the heuristic extraction;
 site footers, print headers, and common interface notices are removed first.
@@ -86,9 +90,11 @@ both `pageArticle` and `pageDescription` preserve the original feed description
 without requesting the page or using cached page text. These links identify a
 single update, while the page can contain many unrelated updates. Other live-blog
 URL formats are not yet handled specially.
-JSON descriptions contain the same HTML as RSS descriptions. Existing
-article cache entries store text and receive the formatting when served, so this
-formatting change requires no cache clearing or extra article requests.
+JSON descriptions contain the same HTML as RSS descriptions. Article caches now
+store sanitized HTML so formatting survives cache hits without double escaping.
+Old text-only article cache entries are bypassed once to fetch the original
+formatting; no manual cache clearing is needed. Normal cache lifetimes and the
+number of requests per uncached article are unchanged.
 
 No publisher settings are required by default. For a site whose article is not
 identified correctly, an optional XPath expression can select its body before
@@ -136,7 +142,7 @@ An explicit `Free` access level also suppresses a conflicting JSON-LD restrictio
 
 Paywall status is cached with the text and adds no page requests during normal
 processing. Older cache entries without this status or with an outdated detection
-version are refetched once to update it. The note is added when serving the item, so cached text does not accumulate
+version are refetched once to update it. The note is added when serving the item, so cached content does not accumulate
 duplicate notes. RSS and JSON include it in `description`; `comments` is unchanged.
 
 ### PageDescription

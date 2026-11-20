@@ -46,12 +46,12 @@ class PageArticleTest extends \PHPUnit_Framework_TestCase
     public function articlesProvider()
     {
         return [
-            ['<meta name="description" content="Summary"><section itemprop="articleBody"><p>First <b>bold </b>word.</p><p>ÅÄÖ &amp; blåbär.</p></section>', '<p>First bold word.</p>' . "\n" . '<p>ÅÄÖ &amp; blåbär.</p>'],
+            ['<meta name="description" content="Summary"><section itemprop="articleBody"><p>First <b>bold </b>word.</p><p>ÅÄÖ &amp; blåbär.</p></section>', '<p>First <strong>bold </strong>word.</p>' . "\n" . '<p>ÅÄÖ &amp; blåbär.</p>'],
             ['<div itemprop="text articleBody"><p>First</p><div itemprop="articleBody"><p>Second</p></div></div>', "<p>First</p>\n<p>Second</p>"],
             ['<section itemprop="articleBody"><p>First</p></section><section itemprop="articleBody"><p>Second</p></section>', "<p>First</p>\n<p>Second</p>"],
-            ['<section itemprop="articleBody"><table><tr><th>Name</th><th>Score</th></tr><tr><td>Club</td><td>3</td></tr></table></section>', "<p>Name Score</p>\n<p>Club 3</p>"],
+            ['<section itemprop="articleBody"><table><tr><th>Name</th><th>Score</th></tr><tr><td>Club</td><td>3</td></tr></table></section>', '<table><tr><th>Name</th><th>Score</th></tr><tr><td>Club</td><td>3</td></tr></table>'],
             ['<section itemprop="articleBody"><time>Published yesterday</time><p>Actual story.</p><figure><figcaption>Video promotion and photo credit.</figcaption></figure><p>Final paragraph.</p></section>', "<p>Actual story.</p>\n<p>Final paragraph.</p>"],
-            ['<section itemprop="articleBody"><p>Line<br>break</p><p><i>More</i> text.</p><script>alert(1)</script><nav>Menu</nav><aside>Related</aside><form>Subscribe</form><footer>Footer</footer><p hidden>Hidden</p><p aria-hidden="true">Hidden</p></section>', "<p>Line<br>break</p>\n<p>More text.</p>"],
+            ['<section itemprop="articleBody"><p>Line<br>break</p><p><i>More</i> text.</p><script>alert(1)</script><nav>Menu</nav><aside>Related</aside><form>Subscribe</form><footer>Footer</footer><p hidden>Hidden</p><p aria-hidden="true">Hidden</p></section>', "<p>Line<br>break</p>\n<p><em>More</em> text.</p>"],
             ['<script type="application/ld+json">{"@graph":[{"@type":"NewsArticle","articleBody":"First paragraph.\n\nSecond &amp; final paragraph."}]}</script>', "<p>First paragraph.</p>\n<p>Second &amp; final paragraph.</p>"],
             ['<script type="application/ld+json">[{"@type":["Thing","https://schema.org/BlogPosting"],"articleBody":"<p>Café</p><p>日本語</p>"}]</script>', "<p>Café</p>\n<p>日本語</p>"],
             ['<script type="application/ld+json">{"@type":"Product","articleBody":"Unrelated"}</script><meta name="description" content="Summary">', '<p>Summary</p>'],
@@ -140,10 +140,11 @@ class PageArticleTest extends \PHPUnit_Framework_TestCase
         $this->assertSame([], glob($this->cacheDir . '/*'));
     }
 
-    public function testPreviousArticleCacheVersionIsIgnored()
+    /** @dataProvider oldArticleCachePrefixesProvider */
+    public function testPreviousArticleCacheVersionIsIgnored($prefix)
     {
         $url = 'https://example.com/article';
-        file_put_contents($this->cacheDir . '/article-v1-' . hash('sha256', $url) . '.json',
+        file_put_contents($this->cacheDir . '/' . $prefix . hash('sha256', $url) . '.json',
             json_encode(['expiresAt' => 100000, 'description' => 'Old noisy extraction']));
         $section = new PageArticleStub();
         $section->cache = true;
@@ -153,6 +154,11 @@ class PageArticleTest extends \PHPUnit_Framework_TestCase
         $section->processItem($item);
         $this->assertSame('<p>Clean article.</p>', $item->description);
         $this->assertCount(1, $section->urls);
+    }
+
+    public function oldArticleCachePrefixesProvider()
+    {
+        return [['article-v1-'], ['article-v2-']];
     }
 
     public function testPublisherOverrideAndMissingOverrideFallback()
