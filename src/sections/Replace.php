@@ -36,7 +36,7 @@ class Replace extends Section
         
         \Assert\that($this->attribute, 'replace.attribute')->notEmpty()->inArray(Item::dataAttributes());
         \Assert\that($this->search, 'replace.search')->notEmpty()->string();
-        \Assert\that($this->replace, 'replace.replace')->notEmpty()->string();
+        \Assert\that($this->replace, 'replace.replace')->string();
     }
     
     /**

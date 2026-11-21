@@ -32,6 +32,21 @@ class ReplaceTest extends \PHPUnit_Framework_TestCase
     }
     
     
+    public function testEmptyReplacementDeletesParagraph()
+    {
+        $item = new Item(['description' => '<p>Before</p><p>Annons</p><p>After</p>']);
+        $section = Section::create([
+            'type' => 'replace',
+            'attribute' => 'description',
+            'search' => '<p>Annons</p>',
+            'replace' => '',
+        ]);
+
+        $section->processItem($item);
+
+        $this->assertSame('<p>Before</p><p>After</p>', $item->description);
+    }
+
     public function invalidConfigsProvider()
     {
         return [
