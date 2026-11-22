@@ -299,7 +299,7 @@ class PageArticleTest extends \PHPUnit_Framework_TestCase
                 $section->body = '<script type="application/ld+json">' . json_encode($data) . '</script>' . $body;
                 $item = $this->item();
                 $section->processItem($item);
-                $this->assertSame('<p>' . trim($paragraph) . "</p>\n<p>Troligen betalvägg</p>",
+                $this->assertSame('<p>' . trim($paragraph) . "</p>\n<p>Trolig betalvägg</p>",
                     $item->description, $method . ': ' . $class);
             }
         }
