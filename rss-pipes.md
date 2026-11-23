@@ -28,7 +28,7 @@ With the supplied web entry point, `index.php?pipe=news` returns RSS and `index.
 | `atom` | `url`; optional `showErrors` | Fetches an Atom feed and converts entries into the internal RSS item fields. Atom `id` becomes `guid`, `content` becomes `description`, and `updated` becomes `pubDate`. It inherits `rss` fetch error handling. [Source](https://github.com/urmaul/rss-pipes/blob/9e11e9a5315e8d11764c2784c02ffa02dee5639f/src/sections/Atom.php) |
 | `filter` | `rules` | Keeps matching items. [Source](https://github.com/urmaul/rss-pipes/blob/9e11e9a5315e8d11764c2784c02ffa02dee5639f/src/sections/Filter.php) |
 | `block` | `rules` | Removes matching items. [Source](https://github.com/urmaul/rss-pipes/blob/9e11e9a5315e8d11764c2784c02ffa02dee5639f/src/sections/Block.php) |
-| `replace` | `attribute`, `search`, `replace` | Replaces every exact occurrence of `search` in the selected field of every item. Both `search` and `replace` must be nonempty strings. [Source](https://github.com/urmaul/rss-pipes/blob/9e11e9a5315e8d11764c2784c02ffa02dee5639f/src/sections/Replace.php) |
+| `replace` | `attribute`, `search`, `replace` | Replaces every exact occurrence of `search` in the selected field of every item. `search` must be nonempty. An empty `replace` deletes matches. Set `regex: true` for a delimited PCRE pattern. [Source](https://github.com/urmaul/rss-pipes/blob/9e11e9a5315e8d11764c2784c02ffa02dee5639f/src/sections/Replace.php) |
 | `callback` | `feed` **or** `item` | Calls PHP code to modify the whole feed or each item. If both are supplied, only `feed` runs. [Source](https://github.com/urmaul/rss-pipes/blob/9e11e9a5315e8d11764c2784c02ffa02dee5639f/src/sections/Callback.php) |
 | `pipe` | `config` | Runs an **inline nested configuration** and appends its resulting items. It does not look up another pipe by filename, and it does not copy that pipe’s metadata. [Source](https://github.com/urmaul/rss-pipes/blob/9e11e9a5315e8d11764c2784c02ffa02dee5639f/src/sections/Pipe.php) |
 
@@ -59,7 +59,7 @@ Nested lists alternate OR and AND. For example, `title: [[Python, tutorial]]` ma
 
 ### `replace` fields
 
-`attribute` must be one of `guid`, `pubDate`, `title`, `link`, `description`, or `comments`. Replacement is case sensitive because it uses PHP’s `str_replace`; it does not accept a regular expression. An empty replacement string is rejected by validation, so this section cannot delete matched text. [Replace implementation](https://github.com/urmaul/rss-pipes/blob/9e11e9a5315e8d11764c2784c02ffa02dee5639f/src/sections/Replace.php)
+`attribute` must be one of `guid`, `pubDate`, `title`, `link`, `description`, or `comments`. Replacement uses literal, case-sensitive matching by default. Set `regex: true` to use a delimited PCRE pattern with optional flags. An empty replacement string deletes matches. Invalid patterns are rejected when loading the pipe. [Replace implementation](https://github.com/urmaul/rss-pipes/blob/9e11e9a5315e8d11764c2784c02ffa02dee5639f/src/sections/Replace.php)
 
 ### Nested pipe example
 

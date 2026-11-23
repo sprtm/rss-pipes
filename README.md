@@ -246,6 +246,7 @@ Parameters:
 * **attribute** - attribute we want to replace substring in.
 * **search** - subtring we want to replace.
 * **replace** - subtring we want to replace with.
+* **regex** - optional boolean, defaults to `false`. Set to `true` to use a delimited PCRE pattern in `search`. Replacement strings support capture references such as `$1`. Invalid patterns are rejected when the pipe loads.
 
 Sample:
 
@@ -255,6 +256,16 @@ Sample:
   attribute: title
   search: space
   replace: spaaace
+```
+
+Remove a podcast sponsor footer and everything after it, including line breaks.
+
+```yaml
+- type: replace
+  attribute: description
+  regex: true
+  search: '~(?:<br\s*/?>\s*)?(?:<p>\s*)?Testa Stör är sponsrade av ComeOn!.*\z~s'
+  replace: ''
 ```
 
 ### Pipe

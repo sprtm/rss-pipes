@@ -29,6 +29,9 @@ class Replace extends Section
      * @var string
      */
     public $replace;
+
+    /** @var bool Whether search is a delimited PCRE pattern. */
+    public $regex = false;
     
     public function init()
     {
@@ -37,6 +40,10 @@ class Replace extends Section
         \Assert\that($this->attribute, 'replace.attribute')->notEmpty()->inArray(Item::dataAttributes());
         \Assert\that($this->search, 'replace.search')->notEmpty()->string();
         \Assert\that($this->replace, 'replace.replace')->string();
+        \Assert\that($this->regex, 'replace.regex')->boolean();
+        if ($this->regex && @preg_match($this->search, '') === false) {
+            throw new \InvalidArgumentException('replace.search must be a valid delimited regular expression');
+        }
     }
     
     /**
@@ -47,7 +54,15 @@ class Replace extends Section
         $data = $item->getData();
         
         $replaced = [];
-        $replaced[$this->attribute] = str_replace($this->search, $this->replace, $data[$this->attribute]);
+        if ($this->regex) {
+            $value = preg_replace($this->search, $this->replace, (string) $data[$this->attribute]);
+            if ($value === null) {
+                throw new \RuntimeException('Regex replacement failed with PCRE error ' . preg_last_error());
+            }
+            $replaced[$this->attribute] = $value;
+        } else {
+            $replaced[$this->attribute] = str_replace($this->search, $this->replace, $data[$this->attribute]);
+        }
         $item->setData($replaced);
     }
 }

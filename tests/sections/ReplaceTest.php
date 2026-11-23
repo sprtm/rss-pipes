@@ -47,9 +47,40 @@ class ReplaceTest extends \PHPUnit_Framework_TestCase
         $this->assertSame('<p>Before</p><p>After</p>', $item->description);
     }
 
+    public function testRegexRemovesFooterAcrossLines()
+    {
+        $section = Section::create([
+            'type' => 'replace',
+            'attribute' => 'description',
+            'regex' => true,
+            'search' => '~(?:<br\s*/?>\s*)?(?:<p>\s*)?Testa Stör är sponsrade av ComeOn!.*\z~s',
+            'replace' => '',
+        ]);
+        $item = new Item(['description' => "<p>Episode</p><br><p>Testa Stör är sponsrade av ComeOn! Ad</p>\n<p>Footer</p>"]);
+        $section->processItem($item);
+        $this->assertSame('<p>Episode</p>', $item->description);
+
+        $item = new Item(['description' => '<p>Episode without sponsors</p>']);
+        $section->processItem($item);
+        $this->assertSame('<p>Episode without sponsors</p>', $item->description);
+    }
+
+    /** @expectedException \InvalidArgumentException */
+    public function testInvalidRegexIsRejected()
+    {
+        Section::create([
+            'type' => 'replace',
+            'attribute' => 'description',
+            'regex' => true,
+            'search' => '~[~',
+            'replace' => '',
+        ]);
+    }
+
     public function invalidConfigsProvider()
     {
         return [
+            [['type' => 'replace', 'attribute' => 'title', 'search' => 'a', 'replace' => '', 'regex' => 'true']],
             [['type' => 'replace']],
             [['type' => 'replace', 'attribute' => 'title', 'search' => 'a']],
             [['type' => 'replace', 'attribute' => 'title', 'replace' => 'u']],
