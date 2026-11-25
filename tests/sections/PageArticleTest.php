@@ -483,9 +483,133 @@ class PageArticleTest extends \PHPUnit_Framework_TestCase
         }
     }
 
+    /**
+     * @dataProvider invalidCookieFilesProvider
+     * @expectedException rsspipes\sections\exceptions\InvalidConfigException
+     */
+    public function testInvalidCookieFiles($contents)
+    {
+        $path = $this->cacheDir . '/cookies.txt';
+        file_put_contents($path, $contents);
+        Section::create(['type' => 'pageArticle', 'cookieFile' => $path]);
+    }
+
+    public function invalidCookieFilesProvider()
+    {
+        return [
+            [''],
+            ['# Netscape HTTP Cookie File'],
+            ['Cookie: session=secret'],
+            ["Set-Cookie: session=secret"],
+            ["\tTRUE\t/\tTRUE\t0\tsession\tsecret"],
+            ["example.com\tFALSE\t/\tTRUE\tnever\tsession\tsecret"],
+            ["example.com\tFALSE\t/\tTRUE\t0\tsession\tbad\x00value"],
+        ];
+    }
+
+    public function testCookieTransportScopesCookiesAcrossRedirects()
+    {
+        if (!extension_loaded('curl') || !function_exists('pcntl_fork')) {
+            $this->markTestSkipped('PHP curl and pcntl extensions required');
+        }
+        $server = @stream_socket_server('tcp://127.0.0.1:0', $errno, $error);
+        if ($server === false) {
+            $this->markTestSkipped('Loopback listener unavailable');
+        }
+        $address = stream_socket_get_name($server, false);
+        $port = substr(strrchr($address, ':'), 1);
+        $path = $this->cacheDir . '/cookies.txt';
+        $contents = "# Netscape HTTP Cookie File\n" .
+            "#HttpOnly_127.0.0.1\tFALSE\t/\tFALSE\t0\tsession\tsecret\n" .
+            "127.0.0.1\tFALSE\t/other\tFALSE\t0\twrongPath\tsecret\n" .
+            "127.0.0.1\tFALSE\t/\tFALSE\t1\texpired\tsecret\n" .
+            "example.com\tFALSE\t/\tFALSE\t0\twrongHost\tsecret\n";
+        file_put_contents($path, $contents);
+        $pid = pcntl_fork();
+        if ($pid === -1) {
+            fclose($server);
+            $this->markTestSkipped('Cannot fork HTTP fixture');
+        }
+        if ($pid === 0) {
+            // Echo the request headers; redirect to a different host spelling.
+            $requests = [];
+            foreach ([true, false] as $redirect) {
+                $client = @stream_socket_accept($server, 5);
+                if (!$client) {
+                    exit(1);
+                }
+                stream_set_timeout($client, 5);
+                $headers = '';
+                while (($line = fgets($client)) !== false && $line !== "\r\n") {
+                    $headers .= $line;
+                }
+                $requests[] = $headers;
+                $body = json_encode($requests);
+                $status = $redirect ? '302 Found' : '200 OK';
+                $location = $redirect ? "Location: http://localhost:" . $port . "/article\r\n" : '';
+                fwrite($client, "HTTP/1.1 " . $status . "\r\n" . $location .
+                    "Content-Length: " . strlen($body) . "\r\nConnection: close\r\n\r\n" . $body);
+                fclose($client);
+            }
+            fclose($server);
+            exit(0);
+        }
+        fclose($server);
+        try {
+            $section = new CookieTransportArticleStub();
+            $section->cookieFile = $path;
+            $section->init();
+            list($body, $status) = $section->requestForTest('http://' . $address . '/article');
+            $this->assertSame(200, $status);
+            // A cookie for 127.0.0.1 must not follow a redirect to localhost.
+            $requests = json_decode($body, true);
+            $this->assertCount(2, $requests);
+            $this->assertContains('session=secret', $requests[0]);
+            $this->assertNotContains('wrongPath', $requests[0]);
+            $this->assertNotContains('expired', $requests[0]);
+            $this->assertNotContains('wrongHost', $requests[0]);
+            $this->assertNotContains('secret', $requests[1]);
+            $this->assertSame($contents, file_get_contents($path));
+        } finally {
+            pcntl_waitpid($pid, $status);
+        }
+    }
+
+    public function testCookiesSeparateCachesAndAreReadOnly()
+    {
+        if (!extension_loaded('curl')) {
+            $this->markTestSkipped('PHP curl extension required');
+        }
+        $path = $this->cacheDir . '/cookies.txt';
+        $contents = "# Netscape HTTP Cookie File\n#HttpOnly_.example.com\tTRUE\t/\tTRUE\t0\tsession\tfirst\n";
+        file_put_contents($path, $contents);
+        $anonymous = new PageArticleStub();
+        $anonymous->cache = true;
+        $anonymous->cacheDir = $this->cacheDir;
+        $anonymous->body = '<section itemprop="articleBody"><p>Anonymous</p></section>';
+        $anonymous->init();
+        $anonymous->processItem($this->item());
+        $signedIn = clone $anonymous;
+        $signedIn->urls = [];
+        $signedIn->cookieFile = $path;
+        $signedIn->body = '<section itemprop="articleBody"><p>Full article</p></section>';
+        $signedIn->init();
+        $item = $this->item();
+        $signedIn->processItem($item);
+        $this->assertSame('<p>Full article</p>', $item->description);
+        $this->assertCount(1, $signedIn->urls);
+        $signedIn->processItem($this->item());
+        $this->assertCount(1, $signedIn->urls);
+        $this->assertSame($contents, file_get_contents($path));
+        file_put_contents($path, str_replace('first', 'second', $contents));
+        $signedIn->init();
+        $signedIn->processItem($this->item());
+        $this->assertCount(2, $signedIn->urls);
+    }
+
     public function invalidConfigsProvider()
     {
-        return [[['timeout' => 0]], [['cache' => 'false']], [['bodyXPath' => '']], [['bodyXPath' => []]], [['bodyXPath' => '//*[']]];
+        return [[['cookieFile' => []]], [['cookieFile' => '']], [['cookieFile' => '/missing/cookies.txt']], [['cookieFile' => 'https://example.com/cookies.txt']], [['timeout' => 0]], [['cache' => 'false']], [['bodyXPath' => '']], [['bodyXPath' => []]], [['bodyXPath' => '//*[']]];
     }
 }
 
@@ -505,5 +629,13 @@ class PageArticleStub extends PageArticle
     {
         $this->urls[] = $url;
         return $this->body;
+    }
+}
+
+class CookieTransportArticleStub extends PageArticle
+{
+    public function requestForTest($url)
+    {
+        return parent::requestPage($url);
     }
 }

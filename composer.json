@@ -21,6 +21,7 @@
         "phpunit/phpunit": "~4.0"
     },
     "suggest": {
+        "ext-curl": "Required for pageArticle.cookieFile authenticated article requests.",
         "urmaul/rss-pipes-selector": "Allows to parse html pages to create rss feeds."
     },
     "autoload": {

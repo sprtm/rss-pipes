@@ -92,15 +92,21 @@ class PageDescription extends Section
     protected function fetchPage($url)
     {
         $response = $this->guardedRequest($url, function () use ($url) {
-            $http = new \HttpClient();
-            $body = $http->get($url, ['timeout' => $this->timeout]);
-            $this->logEvent('page_request', $url, $http->httpCode);
-            return [$body, $http->httpCode];
+            $response = $this->requestPage($url);
+            $this->logEvent('page_request', $url, $response[1]);
+            return $response;
         });
         if ($response === null) {
             return null;
         }
         return $response[1] >= 200 && $response[1] < 300 ? $response[0] : false;
+    }
+
+    protected function requestPage($url)
+    {
+        $http = new \HttpClient();
+        $body = $http->get($url, ['timeout' => $this->timeout]);
+        return [$body, $http->httpCode];
     }
 
     protected function currentTime()

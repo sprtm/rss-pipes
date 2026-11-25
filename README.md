@@ -133,6 +133,84 @@ the general extraction methods run:
 Matching nodes are combined in document order, without repeating nested matches.
 If the expression matches nothing usable, general extraction still runs.
 
+#### Signed-in articles with browser cookies
+
+To fetch articles using your existing publisher subscription, set `cookieFile` to
+an exported **Netscape cookies.txt** file. This option requires PHP's `curl`
+extension and applies only to `pageArticle`, not the RSS source request:
+
+```yaml
+- type: rss
+  url: https://example.com/feed.xml
+- type: pageArticle
+  cookieFile: /srv/rss-pipes-secrets/publisher-cookies.txt
+```
+
+Use an absolute local path readable by the PHP process. Raw `Cookie:` headers,
+JSON exports, HAR files, and browser cookie databases are not accepted. Invalid,
+empty, or unreadable files fail configuration instead of silently fetching anonymously.
+Cookies are loaded when the section initializes; re-exporting them takes effect
+on the next initialization (normally the next feed request).
+
+To save cookies without installing a browser extension:
+
+1. Sign in to the publisher in Chrome or Edge and open a subscriber article.
+2. Open Developer Tools, then **Application → Storage → Cookies**, and select
+   the publisher's origin. The table shows Name, Value, Domain, Path, Expires,
+   Secure, and HttpOnly. See [Chrome's cookie inspector documentation](https://developer.chrome.com/docs/devtools/application/cookies/).
+3. Create a plain text file starting with `# Netscape HTTP Cookie File`. For
+   each publisher session/authentication cookie, copy its fields into one row
+   in the order below, separated by **literal tab characters**. If you cannot
+   identify the authentication cookies, include all cookies for that publisher.
+   Include cookies from its relevant parent domain as well.
+
+```text
+# Netscape HTTP Cookie File
+#HttpOnly_.example.com	TRUE	/	TRUE	0	session	PASTE_COOKIE_VALUE_HERE
+```
+
+The example row uses literal tabs. Its seven fields are:
+
+| Field | Value to save |
+| --- | --- |
+| Domain | Exactly the domain shown in DevTools; prefix it with `#HttpOnly_` if HttpOnly is checked. |
+| Include subdomains | `TRUE` for a domain starting with `.`, otherwise `FALSE`. |
+| Path | The cookie's Path, often `/`. |
+| Secure | `TRUE` if Secure is checked, otherwise `FALSE`. |
+| Expiry | Expiry as Unix seconds; `0` only for cookies shown as Session. |
+| Name | The exact cookie name. |
+| Value | The exact cookie value, without added quotes or URL encoding. |
+
+For a dated expiry, convert the displayed date to Unix seconds, for example
+`Math.floor(Date.parse("2030-01-01T00:00:00Z") / 1000)` in a browser console,
+using the cookie's actual expiry date and timezone. Do not replace an expired
+cookie's date to extend it; sign in again and copy the new value instead.
+The [curl cookie format reference](https://curl.se/docs/http-cookies.html)
+describes the Netscape format. A browser cookie exporter can also produce this
+format; export only the publisher's cookies, including HttpOnly cookies.
+
+4. Save the file outside this repository and the public web directory. On the
+   server, restrict access, for example `chmod 600 /srv/rss-pipes-secrets/publisher-cookies.txt`,
+   and ensure the PHP process owns it or otherwise has read permission.
+5. Set `cookieFile` as above and refresh the feed. If access expires, sign in
+   again and replace the export. The pipe does not log in or renew sessions.
+
+The cookie engine respects domain, path, expiry, and Secure restrictions,
+including across HTTP/HTTPS redirects. Each article request gets its own cookie
+engine; response cookies are not written back to your export or shared with
+other articles. Exported cookie contents distinguish cache entries and seen-link
+history from anonymous requests and other exports, so replacing the export
+allows a fresh fetch. Normal cache lifetimes still apply, including when a
+cookie expires during that lifetime. Cookie values are not included in logs or
+cache contents. Protect the export like a password, and keep the generated
+full-text feed and article cache private if they contain subscriber content.
+
+This works when the publisher returns full HTML to the saved session. Browser
+JavaScript, local storage, partitioned-cookie state, device-bound sessions, and
+additional article API requests are not reproduced. Some publishers will still
+return an excerpt or reject the request. The existing paywall label describes
+the publisher's metadata and may remain even when the full article is fetched.
+
 Fetching, caching, and timeouts work like `pageDescription`: one HTML request per
 new or expired URL, a 5-second timeout, successful results cached for 24 hours,
 and failures cached for 5 minutes. Metadata fallbacks count as successful results.

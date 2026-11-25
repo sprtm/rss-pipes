@@ -12,6 +12,9 @@ class PageArticle extends PageDescription
 {
     public $bodyXPath;
     public $maxFetches;
+    public $cookieFile;
+    private $cookieLines = [];
+    private $cookieIdentity;
     private $fetches = 0;
     private $newLinks;
 
@@ -23,6 +26,7 @@ class PageArticle extends PageDescription
     public function init()
     {
         parent::init();
+        $this->initCookies();
         if ($this->maxFetches !== null && (!is_int($this->maxFetches) || $this->maxFetches < 0)) {
             throw new exceptions\InvalidConfigException('pageArticle.maxFetches must be a non-negative integer');
         }
@@ -37,6 +41,75 @@ class PageArticle extends PageDescription
                 libxml_clear_errors();
                 libxml_use_internal_errors($previous);
             }
+        }
+    }
+
+    private function initCookies()
+    {
+        $this->cookieLines = [];
+        $this->cookieIdentity = null;
+        if ($this->cookieFile === null) {
+            return;
+        }
+        if (!is_string($this->cookieFile) || $this->cookieFile === '' ||
+            strpos($this->cookieFile, '://') !== false || !is_file($this->cookieFile)) {
+            throw new exceptions\InvalidConfigException('pageArticle.cookieFile must be a readable local Netscape cookie file');
+        }
+        $contents = @file_get_contents($this->cookieFile);
+        if ($contents === false) {
+            throw new exceptions\InvalidConfigException('pageArticle.cookieFile must be readable');
+        }
+        foreach (preg_split('/\r\n|\n|\r/', $contents) as $line) {
+            if ($line === '' || ($line[0] === '#' && strpos($line, '#HttpOnly_') !== 0)) {
+                continue;
+            }
+            $fields = explode("\t", preg_replace('/^#HttpOnly_/', '', $line));
+            if (count($fields) !== 7 || !$this->validCookieFields($fields)) {
+                throw new exceptions\InvalidConfigException('pageArticle.cookieFile requires seven tab-separated Netscape cookie fields per row');
+            }
+            $this->cookieLines[] = $line;
+        }
+        if (!$this->cookieLines) {
+            throw new exceptions\InvalidConfigException('pageArticle.cookieFile contains no cookies');
+        }
+        if (!extension_loaded('curl')) {
+            throw new exceptions\InvalidConfigException('pageArticle.cookieFile requires the PHP curl extension');
+        }
+        $this->cookieIdentity = hash('sha256', implode("\n", $this->cookieLines));
+    }
+
+    private function validCookieFields(array $fields)
+    {
+        return preg_match('/^\.?[a-zA-Z0-9_-]+(?:\.[a-zA-Z0-9_-]+)*$/D', $fields[0]) &&
+            in_array($fields[1], ['TRUE', 'FALSE'], true) && substr($fields[2], 0, 1) === '/' &&
+            in_array($fields[3], ['TRUE', 'FALSE'], true) && ctype_digit($fields[4]) &&
+            $fields[5] !== '' && !preg_match('/[\x00-\x1f\x7f]/', implode('', $fields));
+    }
+
+    protected function requestPage($url)
+    {
+        if ($this->cookieIdentity === null) {
+            return parent::requestPage($url);
+        }
+        $handle = curl_init($url);
+        try {
+            curl_setopt_array($handle, [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_FOLLOWLOCATION => true,
+                CURLOPT_MAXREDIRS => 5,
+                CURLOPT_TIMEOUT => $this->timeout,
+                CURLOPT_PROTOCOLS => CURLPROTO_HTTP | CURLPROTO_HTTPS,
+                CURLOPT_REDIR_PROTOCOLS => CURLPROTO_HTTP | CURLPROTO_HTTPS,
+                CURLOPT_ENCODING => '',
+                CURLOPT_COOKIEFILE => '',
+            ]);
+            foreach ($this->cookieLines as $line) {
+                curl_setopt($handle, CURLOPT_COOKIELIST, $line);
+            }
+            $body = curl_exec($handle);
+            return [$body, curl_getinfo($handle, CURLINFO_HTTP_CODE)];
+        } finally {
+            curl_close($handle);
         }
     }
 
@@ -103,6 +176,9 @@ class PageArticle extends PageDescription
     protected function cachePath($url)
     {
         // An override changes the representation cached for a given URL.
+        if ($this->cookieIdentity !== null) {
+            $url .= "\0cookies\0" . $this->cookieIdentity;
+        }
         return parent::cachePath($this->bodyXPath === null ? $url : $url . "\0bodyXPath\0" . $this->bodyXPath);
     }
 
