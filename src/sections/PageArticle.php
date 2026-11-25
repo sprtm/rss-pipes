@@ -51,13 +51,16 @@ class PageArticle extends PageDescription
         if ($this->cookieFile === null) {
             return;
         }
-        if (!is_string($this->cookieFile) || $this->cookieFile === '' ||
-            strpos($this->cookieFile, '://') !== false || !is_file($this->cookieFile)) {
-            throw new exceptions\InvalidConfigException('pageArticle.cookieFile must be a readable local Netscape cookie file');
+        if (!is_string($this->cookieFile) || trim($this->cookieFile) === '' ||
+            strpos($this->cookieFile, '://') !== false || strpos($this->cookieFile, "\0") !== false) {
+            throw new exceptions\InvalidConfigException('pageArticle.cookieFile must be a local file path, not a URL or cookie contents');
+        }
+        if (!is_file($this->cookieFile)) {
+            throw new exceptions\InvalidConfigException('pageArticle.cookieFile was not found as a regular file by PHP. Use a path on the server; in Docker, mount the file and use its container path');
         }
         $contents = @file_get_contents($this->cookieFile);
         if ($contents === false) {
-            throw new exceptions\InvalidConfigException('pageArticle.cookieFile must be readable');
+            throw new exceptions\InvalidConfigException('pageArticle.cookieFile could not be read by PHP. Check file and parent-directory permissions for the PHP user');
         }
         foreach (preg_split('/\r\n|\n|\r/', $contents) as $line) {
             if ($line === '' || ($line[0] === '#' && strpos($line, '#HttpOnly_') !== 0)) {
@@ -92,6 +95,7 @@ class PageArticle extends PageDescription
             return parent::requestPage($url);
         }
         $handle = curl_init($url);
+        $paywallUnlocked = false;
         try {
             curl_setopt_array($handle, [
                 CURLOPT_RETURNTRANSFER => true,
@@ -102,14 +106,97 @@ class PageArticle extends PageDescription
                 CURLOPT_REDIR_PROTOCOLS => CURLPROTO_HTTP | CURLPROTO_HTTPS,
                 CURLOPT_ENCODING => '',
                 CURLOPT_COOKIEFILE => '',
+                CURLOPT_HEADERFUNCTION => function ($handle, $header) use (&$paywallUnlocked) {
+                    // Only trust the final response's access decision after redirects.
+                    if (stripos($header, 'HTTP/') === 0) {
+                        $paywallUnlocked = false;
+                    } elseif (stripos($header, 'x-paywall-unlocked:') === 0) {
+                        $paywallUnlocked = trim(substr($header, strlen('x-paywall-unlocked:'))) !== '';
+                    }
+                    return strlen($header);
+                },
             ]);
             foreach ($this->cookieLines as $line) {
                 curl_setopt($handle, CURLOPT_COOKIELIST, $line);
             }
             $body = curl_exec($handle);
-            return [$body, curl_getinfo($handle, CURLINFO_HTTP_CODE)];
+            return [$body, curl_getinfo($handle, CURLINFO_HTTP_CODE), ['paywallUnlocked' => $paywallUnlocked]];
         } finally {
             curl_close($handle);
+        }
+    }
+
+    protected function fetchPage($url)
+    {
+        $body = parent::fetchPage($url);
+        $host = strtolower((string) parse_url($url, PHP_URL_HOST));
+        if ($this->cookieIdentity === null || !is_string($body) ||
+            !in_array($host, ['www.sydsvenskan.se', 'sydsvenskan.se'], true) ||
+            parse_url($url, PHP_URL_SCHEME) !== 'https' || stripos($body, '<lcl-tapet-paywall') === false) {
+            return $body;
+        }
+        $document = $this->subscriberDocument($body);
+        if ($document === null) {
+            return $body;
+        }
+        $paywall = $document->getElementsByTagName('lcl-tapet-paywall')->item(0);
+        if (!$paywall || $paywall->getAttribute('data-article-uuid') === '') {
+            return $body;
+        }
+        $article = (new \DOMXPath($document))->query(
+            'ancestor::*[contains(concat(" ", normalize-space(@class), " "), " article ")][1]', $paywall
+        )->item(0);
+        if (!$article) {
+            return $body;
+        }
+        // Reproduce the publisher's browser flow, using only the original host.
+        // Never use a URL supplied by the downloaded markup as a request target.
+        $parameters = [
+            'articleUrl' => $url,
+            'articleId' => $paywall->getAttribute('data-article-uuid'),
+            'channel' => 'desktop',
+        ];
+        foreach (['segments', 'context', 'access-restriction'] as $attribute) {
+            $value = $paywall->getAttribute('data-' . $attribute);
+            if ($value !== '') {
+                $parameters[$attribute === 'access-restriction' ? 'accessRestriction' : $attribute] = $value;
+            }
+        }
+        $endpoint = 'https://' . $host . '/api/get-paywall?' . http_build_query($parameters, '', '&', PHP_QUERY_RFC3986);
+        $accessGranted = false;
+        $response = $this->guardedRequest($endpoint, function () use ($endpoint, &$accessGranted) {
+            $response = $this->requestPage($endpoint);
+            $accessGranted = !empty($response[2]['paywallUnlocked']);
+            $this->logEvent('subscriber_content_request', $endpoint, $response[1]);
+            return $response;
+        });
+        if ($response === null || $response[1] < 200 || $response[1] >= 300 ||
+            !$accessGranted || !is_string($response[0]) || trim($response[0]) === '') {
+            $this->logEvent('subscriber_access_not_granted', $url);
+            return $body;
+        }
+        $unlocked = $this->subscriberDocument($response[0]);
+        $replacement = $unlocked === null ? null : (new \DOMXPath($unlocked))->query(
+            '(//*[contains(concat(" ", normalize-space(@class), " "), " article ")])[1]'
+        )->item(0);
+        if (!$replacement) {
+            $this->logEvent('subscriber_content_unrecognized', $url);
+            return $body;
+        }
+        $article->parentNode->replaceChild($document->importNode($replacement, true), $article);
+        $this->logEvent('using_subscriber_content', $url);
+        return $document->saveHTML();
+    }
+
+    private function subscriberDocument($body)
+    {
+        $previous = libxml_use_internal_errors(true);
+        try {
+            $document = new \DOMDocument();
+            return $document->loadHTML('<?xml encoding="UTF-8">' . $body, LIBXML_NONET) ? $document : null;
+        } finally {
+            libxml_clear_errors();
+            libxml_use_internal_errors($previous);
         }
     }
 
@@ -177,7 +264,7 @@ class PageArticle extends PageDescription
     {
         // An override changes the representation cached for a given URL.
         if ($this->cookieIdentity !== null) {
-            $url .= "\0cookies\0" . $this->cookieIdentity;
+            $url .= "\0cookies-v2\0" . $this->cookieIdentity;
         }
         return parent::cachePath($this->bodyXPath === null ? $url : $url . "\0bodyXPath\0" . $this->bodyXPath);
     }
